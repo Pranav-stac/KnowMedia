@@ -27,18 +27,20 @@ const MediaDesigner = ({ onClose, onMediaGenerated }) => {
       // Store current image as fallback
       const currentImage = generatedImage;
       
+      console.log('Generating image with prompt:', prompt);
       const imageUrl = await generateImage(prompt);
       
       // Check if we got a valid image URL back
-      if (imageUrl) {
-        setGeneratedImage(imageUrl);
-        setPrompt('');
-      } else {
-        throw new Error("Failed to generate image");
+      if (!imageUrl || imageUrl.trim() === '') {
+        throw new Error("No image URL returned");
       }
+      
+      console.log('Generated image URL:', imageUrl);
+      setGeneratedImage(imageUrl);
+      setPrompt('');
     } catch (err) {
       console.error('Error generating image:', err);
-      setError('Failed to generate image. Using default image.');
+      setError(`An image couldn't be generated based on your prompt. Try a different description.`);
       // Don't change the current image on error
     } finally {
       setIsGenerating(false);
@@ -46,9 +48,10 @@ const MediaDesigner = ({ onClose, onMediaGenerated }) => {
   };
 
   // Update handleImageError function
-  const handleImageError = () => {
+  const handleImageError = (e) => {
     console.warn('Generated image failed to load');
     setError('Image failed to load. Using default image.');
+    // Set to fallback Unsplash image
     setGeneratedImage('https://images.unsplash.com/photo-1535957998253-26ae1ef29506?ixlib=rb-4.0.3&auto=format&fit=crop&w=1350&q=80');
   };
 

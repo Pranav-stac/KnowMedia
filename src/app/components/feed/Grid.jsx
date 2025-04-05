@@ -1,8 +1,9 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import PostItem from './PostItem';
 import { getPosts, addPost, updatePost, deletePost } from '@/lib/firebase';
+import { analyzeImage, generateImage, generateText } from '@/lib/ai';
 
 // Inline fallback avatars to avoid import issues
 const fallbackAvatars = {
@@ -26,8 +27,15 @@ const Grid = () => {
     description: '',
     image: '',
     status: 'draft',
-    platform: 'linkedin'
+    platform: 'linkedin',
+    hashtags: []
   });
+  
+  // Add new states for image generation and analysis
+  const [imagePrompt, setImagePrompt] = useState('');
+  const [isGeneratingImage, setIsGeneratingImage] = useState(false);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const fileInputRef = useRef(null);
   
   // Load posts from Firebase
   useEffect(() => {
@@ -58,7 +66,8 @@ const Grid = () => {
       description: '',
       image: '',
       status: 'draft',
-      platform: 'linkedin'
+      platform: 'linkedin',
+      hashtags: []
     });
   };
   
@@ -117,6 +126,68 @@ const Grid = () => {
       await deletePost(postId);
     } catch (error) {
       console.error("Error deleting post:", error);
+    }
+  };
+
+  // Add image upload handler
+  const handleImageUpload = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setNewPost(prev => ({
+          ...prev,
+          image: reader.result
+        }));
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  // Add image generation handler
+  const handleGenerateImage = async () => {
+    if (!imagePrompt.trim()) {
+      alert('Please enter an image prompt');
+      return;
+    }
+
+    setIsGeneratingImage(true);
+    try {
+      const imageUrl = await generateImage(imagePrompt);
+      setNewPost(prev => ({
+        ...prev,
+        image: imageUrl
+      }));
+      setImagePrompt('');
+    } catch (error) {
+      console.error('Error generating image:', error);
+      alert('Failed to generate image. Please try again.');
+    } finally {
+      setIsGeneratingImage(false);
+    }
+  };
+
+  // Add AI analysis handler
+  const analyzeImageAndGenerateContent = async () => {
+    if (!newPost.image) {
+      alert('Please upload or generate an image first');
+      return;
+    }
+
+    setIsAnalyzing(true);
+    try {
+      const content = await analyzeImage(newPost.image);
+      setNewPost(prev => ({
+        ...prev,
+        title: content.title || prev.title,
+        description: content.description || prev.description,
+        hashtags: content.hashtags || prev.hashtags
+      }));
+    } catch (error) {
+      console.error('Error analyzing image:', error);
+      alert('Failed to analyze image. Please try again.');
+    } finally {
+      setIsAnalyzing(false);
     }
   };
 
@@ -184,6 +255,74 @@ const Grid = () => {
                     <option value="twitter">Twitter</option>
                   </select>
                 </div>
+
+                {/* Image Section */}
+                <div>
+                  <label className="block text-sm font-medium mb-2">Image</label>
+                  <div className="space-y-4">
+                    {/* Image Preview */}
+                    {newPost.image && (
+                      <div className="relative w-full aspect-video rounded-lg overflow-hidden bg-[var(--background)]">
+                        <img 
+                          src={newPost.image} 
+                          alt="Post preview" 
+                          className="w-full h-full object-cover"
+                        />
+                      </div>
+                    )}
+                    
+                    {/* Image Upload & Generation */}
+                    <div className="flex flex-col sm:flex-row gap-4">
+                      <div className="flex-1">
+                        <input
+                          type="file"
+                          ref={fileInputRef}
+                          onChange={handleImageUpload}
+                          accept="image/*"
+                          className="hidden"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => fileInputRef.current?.click()}
+                          className="w-full px-4 py-2 rounded-lg border border-[var(--border)] hover:bg-[var(--background)] transition-colors"
+                        >
+                          Upload Image
+                        </button>
+                      </div>
+                      
+                      <div className="flex-1 flex gap-2">
+                        <input
+                          type="text"
+                          value={imagePrompt}
+                          onChange={(e) => setImagePrompt(e.target.value)}
+                          placeholder="Enter image prompt..."
+                          className="flex-1 px-4 py-2 rounded-lg bg-[var(--background)] border border-[var(--border)] focus:outline-none focus:ring-2 focus:ring-[var(--primary)]"
+                        />
+                        <button
+                          type="button"
+                          onClick={handleGenerateImage}
+                          disabled={isGeneratingImage}
+                          className="px-4 py-2 rounded-lg bg-[var(--primary)] text-white hover:bg-[var(--primary-hover)] transition-colors disabled:opacity-50"
+                        >
+                          {isGeneratingImage ? 'Generating...' : 'Generate'}
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* AI Analysis Button */}
+                    {newPost.image && (
+                      <button
+                        type="button"
+                        onClick={analyzeImageAndGenerateContent}
+                        disabled={isAnalyzing}
+                        className="w-full px-4 py-2 rounded-lg bg-[var(--primary)] text-white hover:bg-[var(--primary-hover)] transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+                      >
+                        <AIIcon className="w-5 h-5" />
+                        {isAnalyzing ? 'Analyzing Image...' : 'Analyze Image & Generate Content'}
+                      </button>
+                    )}
+                  </div>
+                </div>
                 
                 <div>
                   <label className="block text-sm font-medium mb-1" htmlFor="title">
@@ -214,6 +353,23 @@ const Grid = () => {
                     placeholder="Enter post description"
                     required
                   />
+                </div>
+
+                {/* Hashtags */}
+                <div>
+                  <label className="block text-sm font-medium mb-2">
+                    Hashtags
+                  </label>
+                  <div className="flex flex-wrap gap-2">
+                    {newPost.hashtags.map((tag, index) => (
+                      <span 
+                        key={index}
+                        className="px-3 py-1 rounded-full bg-[var(--background)] text-sm"
+                      >
+                        #{tag}
+                      </span>
+                    ))}
+                  </div>
                 </div>
                 
                 <div>
@@ -271,6 +427,12 @@ const ListIcon = ({ className }) => (
 );
 
 const PlusIcon = ({ className }) => (
+  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" className={className}>
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+  </svg>
+);
+
+const AIIcon = ({ className }) => (
   <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" className={className}>
     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
   </svg>

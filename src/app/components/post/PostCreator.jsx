@@ -71,6 +71,7 @@ const PostCreator = ({ initialPost, onSave, onCancel }) => {
       content: newMessage
     };
     
+    // Add user message
     setMessages(prev => [...prev, userMessage]);
     setNewMessage('');
     setIsGeneratingText(true);
@@ -84,49 +85,82 @@ const PostCreator = ({ initialPost, onSave, onCancel }) => {
       isTyping: true
     };
     
-    setMessages(prev => [...prev, userMessage, typingMessage]);
+    setMessages(prev => [...prev, typingMessage]);
     
     try {
       // Generate content based on the user's message
-      let generatedContent;
+      let generatedContent = '';
       const userPrompt = newMessage.toLowerCase();
+      let contentType = 'response';
       
       if (userPrompt.includes('post about') || userPrompt.includes('write about')) {
         const topic = userPrompt.replace(/post about|write about|generate post|create post/gi, '').trim();
         generatedContent = await generateSocialMediaPost(topic, selectedProfile.platform);
+        contentType = 'post';
         
         // Update post content with AI response
-        setPostContent(generatedContent);
+        if (generatedContent && generatedContent.trim() !== '') {
+          setPostContent(generatedContent);
+        } else {
+          throw new Error('Failed to generate post content');
+        }
       } else if (userPrompt.includes('content ideas') || userPrompt.includes('suggest ideas')) {
         const topic = userPrompt.replace(/content ideas|suggest ideas|generate ideas/gi, '').trim() || 'social media';
         const ideas = await generateContentIdeas(topic, 5);
-        generatedContent = "Here are some content ideas:\n\n" + ideas.map((idea, i) => `${i+1}. ${idea}`).join('\n\n');
+        
+        if (ideas && ideas.length > 0) {
+          generatedContent = "Here are some content ideas:\n\n" + ideas.map((idea, i) => `${i+1}. ${idea}`).join('\n\n');
+          contentType = 'ideas';
+        } else {
+          throw new Error('Failed to generate content ideas');
+        }
       } else {
         // Default case - just generate a general response
         const prompt = `User is asking: "${newMessage}". Generate a helpful response about social media content creation.`;
         generatedContent = await generateText(prompt);
         
-        // If it's asking for a post, update the post content too
-        if (userPrompt.includes('post') || userPrompt.includes('content')) {
+        // If it looks like a content request, update the post content too
+        if (generatedContent && (userPrompt.includes('post') || userPrompt.includes('content'))) {
           setPostContent(generatedContent);
+          contentType = 'post';
         }
       }
       
-      // Remove typing indicator and add the actual response
-      const aiResponse = {
-        id: messages.length + 2,
-        role: 'assistant',
-        content: "I've created content based on your request! Check the editor on the left."
-      };
+      // Remove typing indicator
+      setMessages(prev => prev.filter(m => m.id !== 'typing'));
       
-      setMessages(prev => prev.filter(m => m.id !== 'typing').concat(aiResponse));
+      // If we got a valid response, add it
+      if (generatedContent && generatedContent.trim() !== '') {
+        let responseMessage = '';
+        
+        switch (contentType) {
+          case 'post':
+            responseMessage = "I've created content based on your request! Check the editor on the left.";
+            break;
+          case 'ideas':
+            responseMessage = generatedContent;
+            break;
+          default:
+            responseMessage = generatedContent;
+        }
+        
+        const aiResponse = {
+          id: Date.now(),
+          role: 'assistant',
+          content: responseMessage
+        };
+        
+        setMessages(prev => [...prev, aiResponse]);
+      } else {
+        throw new Error('No content was generated');
+      }
     } catch (error) {
       console.error("Error generating AI content:", error);
-      setChatError("I couldn't generate content right now. Please try again.");
+      setChatError(`I couldn't generate content: ${error.message || 'Unknown error'}`);
       
       // Remove typing indicator and add error message
       const errorResponse = {
-        id: messages.length + 2,
+        id: Date.now(),
         role: 'assistant',
         content: "I'm sorry, I couldn't generate content right now. Please try again."
       };

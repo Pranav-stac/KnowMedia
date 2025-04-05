@@ -24,6 +24,13 @@ export default function ContentIdeasPage() {
     
     try {
       const generatedIdeas = await generateContentIdeas(industry, 8);
+      
+      // If we got empty array from the API, use fallbacks
+      if (!generatedIdeas || generatedIdeas.length === 0) {
+        setError('No ideas were generated. Please try again with a different topic.');
+        return;
+      }
+      
       setIdeas(generatedIdeas.map((idea, index) => ({
         id: index + 1,
         title: idea,
@@ -31,7 +38,7 @@ export default function ContentIdeasPage() {
       })));
     } catch (err) {
       console.error('Error generating ideas:', err);
-      setError('Failed to generate ideas. Please try again.');
+      setError(`Failed to generate ideas: ${err.message || 'Unknown error'}`);
     } finally {
       setIsGenerating(false);
     }
@@ -57,11 +64,20 @@ export default function ContentIdeasPage() {
     
     try {
       const idea = ideas.find(idea => idea.id === id);
+      if (!idea) {
+        throw new Error('Idea not found');
+      }
+      
       const post = await generateSocialMediaPost(idea.title, platform);
+      
+      if (!post || post.trim() === '') {
+        throw new Error('No content was generated');
+      }
+      
       setGeneratedPost(post);
     } catch (err) {
       console.error('Error generating post:', err);
-      setGeneratedPost('Failed to generate a post for this idea. Please try again.');
+      setGeneratedPost(`Failed to generate a post for this idea: ${err.message || 'Unknown error'}. Please try again.`);
     } finally {
       setIsGeneratingPost(false);
     }

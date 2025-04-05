@@ -38,13 +38,6 @@ const Navbar = () => {
             Analytics
           </NavLink>
           <NavLink 
-            href="/marketplace" 
-            isActive={activeTab === 'marketplace'} 
-            onClick={() => setActiveTab('marketplace')}
-          >
-            Marketplace
-          </NavLink>
-          <NavLink 
             href="/messages" 
             isActive={activeTab === 'messages'} 
             onClick={() => setActiveTab('messages')}

@@ -1,8 +1,8 @@
 import { useState } from 'react';
-import { generateText } from '@/lib/ai';
+import { generateText } from '../../../lib/ai';
 
-const AIInsights = ({ posts, platform = 'all' }) => {
-  const [insights, setInsights] = useState(null);
+const AIInsights = ({ posts = [], platform = 'all' }) => {
+  const [insights, setInsights] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
 
@@ -15,6 +15,12 @@ const AIInsights = ({ posts, platform = 'all' }) => {
       const filteredPosts = platform === 'all' 
         ? posts 
         : posts.filter(post => post.profile?.platform === platform);
+      
+      if (!filteredPosts || filteredPosts.length === 0) {
+        setError('No posts available to analyze. Please add some posts first.');
+        setIsLoading(false);
+        return;
+      }
       
       // Extract relevant data for analysis
       const postData = filteredPosts.map(post => ({
@@ -53,51 +59,57 @@ const AIInsights = ({ posts, platform = 'all' }) => {
       
       // Generate insights
       const generatedInsights = await generateText(prompt);
+      
+      if (!generatedInsights || generatedInsights.trim() === '') {
+        throw new Error('No insights were generated');
+      }
+      
       setInsights(generatedInsights);
     } catch (err) {
       console.error('Error generating insights:', err);
-      setError('Failed to generate insights. Please try again.');
+      setError(`Failed to generate insights: ${err.message || 'Unknown error'}`);
     } finally {
       setIsLoading(false);
     }
   };
 
   return (
-    <div className="bg-[var(--card)] rounded-xl p-6 border border-[var(--border)] mb-6">
+    <div className="bg-[var(--card)] rounded-xl p-6 border border-[var(--border)]">
       <div className="flex items-center justify-between mb-6">
-        <h2 className="text-xl font-semibold">AI Content Insights</h2>
-        
+        <h3 className="text-lg font-semibold">AI-Powered Insights</h3>
         <button
           onClick={generateInsights}
-          disabled={isLoading || posts.length === 0}
-          className="px-4 py-2 bg-[var(--primary)] text-white rounded-md hover:bg-[var(--primary-hover)] transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+          disabled={isLoading}
+          className={`
+            px-4 py-2 rounded-lg text-sm font-medium
+            ${isLoading 
+              ? 'bg-[var(--border)] text-[var(--muted)]' 
+              : 'bg-[var(--primary)] text-white hover:bg-opacity-90'
+            }
+            transition-colors
+          `}
         >
-          <AIIcon className="w-5 h-5" />
-          <span>{isLoading ? 'Analyzing...' : 'Generate Insights'}</span>
+          {isLoading ? 'Analyzing...' : 'Generate Insights'}
         </button>
       </div>
-      
+
       {error && (
-        <div className="p-4 bg-red-100 border border-red-300 text-red-800 rounded-md mb-4">
+        <div className="bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 p-4 rounded-lg mb-4">
           {error}
         </div>
       )}
-      
-      {isLoading ? (
-        <div className="flex items-center justify-center h-64">
-          <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-[var(--primary)]"></div>
+
+      {insights ? (
+        <div className="prose dark:prose-invert max-w-none">
+          <div 
+            dangerouslySetInnerHTML={{ 
+              __html: insights.replace(/\n/g, '<br />') 
+            }} 
+          />
         </div>
-      ) : insights ? (
-        <div className="prose prose-sm dark:prose-invert max-w-full">
-          <div className="whitespace-pre-line">{insights}</div>
-        </div>
-      ) : (
-        <div className="flex flex-col items-center justify-center h-64 text-center">
-          <AILargeIcon className="w-16 h-16 text-[var(--muted)] mb-4" />
-          <p className="text-[var(--muted)] mb-2">No insights generated yet</p>
-          <p className="text-[var(--muted-foreground)] text-sm max-w-md">
-            Click the "Generate Insights" button to analyze your content and get AI-powered recommendations.
-          </p>
+      ) : !error && (
+        <div className="text-[var(--muted)] text-center py-8">
+          Click "Generate Insights" to analyze your content performance and get AI-powered recommendations.
         </div>
       )}
     </div>

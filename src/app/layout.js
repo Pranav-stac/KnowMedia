@@ -4,7 +4,7 @@ import './globals.css';
 const inter = Inter({ subsets: ['latin'], variable: '--font-inter' });
 
 export const metadata = {
-  title: 'Postiz - AI-Powered Social Media Manager',
+  title: 'Whiz - AI-Powered Social Media Manager',
   description: 'Schedule posts, generate AI content, and manage all your social media channels in one place.',
 };
 

@@ -12,6 +12,58 @@ import TabButton from '../components/analytics/TabButton';
 import EngagementReport from '../components/analytics/EngagementReport';
 import DemographicsReport from '../components/analytics/DemographicsReport';
 
+const samplePosts = [
+  {
+    id: 1,
+    description: "Time Management Tips for Professionals",
+    profile: { platform: 'linkedin' },
+    stats: { likes: 423, comments: 56, shares: 44 },
+    date: '2024-02-14'
+  },
+  {
+    id: 2,
+    description: "Behind the Scenes: Product Development",
+    profile: { platform: 'instagram' },
+    stats: { likes: 312, comments: 78, shares: 22 },
+    date: '2024-02-13'
+  },
+  {
+    id: 3,
+    description: "Industry Trends Report",
+    profile: { platform: 'linkedin' },
+    stats: { likes: 287, comments: 45, shares: 55 },
+    date: '2024-02-12'
+  },
+  {
+    id: 4,
+    description: "Team Building Activities",
+    profile: { platform: 'linkedin' },
+    stats: { likes: 245, comments: 34, shares: 21 },
+    date: '2024-02-11'
+  },
+  {
+    id: 5,
+    description: "Customer Spotlight: ABC Corp",
+    profile: { platform: 'linkedin' },
+    stats: { likes: 198, comments: 23, shares: 15 },
+    date: '2024-02-10'
+  },
+  {
+    id: 6,
+    description: "Behind the Scenes",
+    profile: { platform: 'instagram' },
+    stats: { likes: 543, comments: 89, shares: 32 },
+    date: '2024-02-09'
+  },
+  {
+    id: 7,
+    description: "Product Launch Announcement",
+    profile: { platform: 'facebook' },
+    stats: { likes: 321, comments: 67, shares: 41 },
+    date: '2024-02-08'
+  }
+];
+
 const AnalyticsView = () => {
   const [activeTab, setActiveTab] = useState('overview');
   const [selectedPlatform, setSelectedPlatform] = useState('all');
