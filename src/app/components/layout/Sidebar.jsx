@@ -150,8 +150,15 @@ const Sidebar = () => {
           <span>New Channel</span>
         </button>
         
-        <Link href="/post/create">
+        <Link href="/manage-feed">
           <button className="w-full py-3 px-4 rounded-lg bg-[var(--secondary)] hover:bg-[var(--secondary-hover)] transition-colors flex items-center justify-center gap-2 text-white font-medium">
+            <GridViewIcon className="w-5 h-5" />
+            <span>Manage Feed</span>
+          </button>
+        </Link>
+        
+        <Link href="/post/create">
+          <button className="w-full py-3 px-4 rounded-lg bg-[var(--card)] hover:bg-[var(--border)] transition-colors flex items-center justify-center gap-2 font-medium border border-[var(--border)]">
             <WandIcon className="w-5 h-5" />
             <span>Generate Posts</span>
           </button>
@@ -299,5 +306,11 @@ const PlatformIcon = ({ platform, className }) => {
       return null;
   }
 };
+
+const GridViewIcon = ({ className }) => (
+  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" className={className}>
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zm10 0a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zm10 0a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
+  </svg>
+);
 
 export default Sidebar; 
