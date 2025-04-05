@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import Image from 'next/image';
+import { postToInstagram } from '@/lib/instagram';
 
 // Inline fallback avatars to avoid import issues
 const fallbackAvatars = {
@@ -16,8 +17,10 @@ const fallbackImages = {
   'phone-clock': 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxNTAgMzAwIiBmaWxsPSJub25lIj48cmVjdCB3aWR0aD0iMTUwIiBoZWlnaHQ9IjMwMCIgcng9IjIwIiBmaWxsPSIjMDAwIi8+PHJlY3QgeD0iNSIgeT0iNSIgd2lkdGg9IjE0MCIgaGVpZ2h0PSIyOTAiIHJ4PSIxNSIgZmlsbD0iIzExMSIvPjxjaXJjbGUgY3g9Ijc1IiBjeT0iMTUwIiByPSI1MCIgZmlsbD0iIzIyMiIgc3Ryb2tlPSIjNDQ0IiBzdHJva2Utd2lkdGg9IjIiLz48bGluZSB4MT0iNzUiIHkxPSIxNTAiIHgyPSI3NSIgeTI9IjExMCIgc3Ryb2tlPSIjNjY2IiBzdHJva2Utd2lkdGg9IjMiLz48bGluZSB4MT0iNzUiIHkxPSIxNTAiIHgyPSIxMDAiIHkyPSIxNTAiIHN0cm9rZT0iIzY2NiIgc3Ryb2tlLXdpZHRoPSIzIi8+PHRleHQgeD0iNzUiIHk9IjIyMCIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZmlsbD0iI2ZmZiIgZm9udC1mYW1pbHk9IkFyaWFsIiBmb250LXNpemU9IjI0Ij4yOjI0PC90ZXh0Pjwvc3ZnPg=='
 };
 
-const PostItem = ({ post }) => {
+const PostItem = ({ post, onEditClick }) => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [isPosting, setIsPosting] = useState(false);
+  const [postStatus, setPostStatus] = useState(null);
   
   // Default post if none provided
   const defaultPost = {
@@ -39,6 +42,50 @@ const PostItem = ({ post }) => {
   };
   
   const postData = post || defaultPost;
+  
+  // Function to post directly to Instagram
+  const handlePostNow = async (e) => {
+    e.stopPropagation();
+    e.preventDefault();
+    
+    if (!postData.image || !postData.platform || postData.platform !== 'instagram') {
+      alert('This post cannot be posted to Instagram.');
+      return;
+    }
+    
+    try {
+      setIsPosting(true);
+      setPostStatus({ type: 'info', message: 'Posting to Instagram...' });
+      
+      const result = await postToInstagram(postData.image, postData.title || postData.description);
+      
+      setPostStatus({ 
+        type: 'success', 
+        message: 'Posted successfully!' 
+      });
+      
+      // Reset status after a few seconds
+      setTimeout(() => {
+        setPostStatus(null);
+      }, 3000);
+    } catch (error) {
+      console.error('Error posting to Instagram:', error);
+      setPostStatus({ 
+        type: 'error', 
+        message: `Failed to post: ${error.message}` 
+      });
+    } finally {
+      setIsPosting(false);
+    }
+  };
+
+  const getPlatformColor = () => {
+    switch(postData.platform) {
+      case 'linkedin': return '#0077B5';
+      case 'instagram': return '#E4405F';
+      default: return '#6366f1';
+    }
+  };
   
   return (
     <div className="bg-[var(--card)] rounded-xl overflow-hidden border border-[var(--border)] hover:border-[var(--primary)] transition-colors">
@@ -78,39 +125,51 @@ const PostItem = ({ post }) => {
           </div>
         </div>
         
-        {/* Menu Button */}
-        <button 
-          className="absolute top-3 right-3 p-1.5 rounded-full bg-black/50 hover:bg-black/70 text-white transition-colors"
-          onClick={() => setIsMenuOpen(!isMenuOpen)}
-        >
-          <DotsIcon className="w-4 h-4" />
-        </button>
-        
-        {/* Dropdown Menu */}
-        {isMenuOpen && (
-          <div className="absolute top-12 right-3 bg-[var(--card)] rounded-lg shadow-lg border border-[var(--border)] z-10 min-w-40">
-            <ul className="py-1">
-              <li>
-                <button className="w-full text-left px-4 py-2 text-sm hover:bg-[var(--primary)]/10 transition-colors flex items-center gap-2">
-                  <EditIcon className="w-4 h-4" />
-                  Edit Post
+        {/* Menu options */}
+        <div className="absolute top-2 right-2 z-10">
+          <button 
+            onClick={(e) => {
+              e.stopPropagation();
+              setIsMenuOpen(!isMenuOpen);
+            }}
+            className="p-1 rounded-full bg-[var(--card)]/80 hover:bg-[var(--card)] text-[var(--muted)] hover:text-[var(--foreground)] transition-colors"
+          >
+            <DotsIcon className="w-5 h-5" />
+          </button>
+          
+          {isMenuOpen && (
+            <div className="absolute top-full right-0 mt-1 bg-[var(--card)] border border-[var(--border)] rounded-lg shadow-lg py-1 w-32">
+              <button 
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onEditClick?.(postData);
+                  setIsMenuOpen(false);
+                }}
+                className="w-full px-3 py-1.5 text-left text-sm hover:bg-[var(--accent)]/10 flex items-center gap-2"
+              >
+                <EditIcon className="w-4 h-4" />
+                <span>Edit</span>
+              </button>
+              
+              {postData.platform === 'instagram' && (
+                <button 
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handlePostNow(e);
+                    setIsMenuOpen(false);
+                  }}
+                  disabled={isPosting}
+                  className={`w-full px-3 py-1.5 text-left text-sm flex items-center gap-2 ${
+                    isPosting ? 'text-[#E4405F]/50 cursor-not-allowed' : 'text-[#E4405F] hover:bg-[#E4405F]/10'
+                  }`}
+                >
+                  <InstagramIcon className="w-4 h-4" />
+                  <span>{isPosting ? 'Posting...' : 'Post Now'}</span>
                 </button>
-              </li>
-              <li>
-                <button className="w-full text-left px-4 py-2 text-sm hover:bg-[var(--primary)]/10 transition-colors flex items-center gap-2">
-                  <ClockIcon className="w-4 h-4" />
-                  Reschedule
-                </button>
-              </li>
-              <li>
-                <button className="w-full text-left px-4 py-2 text-sm hover:bg-red-500/10 text-red-500 transition-colors flex items-center gap-2">
-                  <TrashIcon className="w-4 h-4" />
-                  Delete
-                </button>
-              </li>
-            </ul>
-          </div>
-        )}
+              )}
+            </div>
+          )}
+        </div>
       </div>
       
       {/* Post Details */}
@@ -141,6 +200,17 @@ const PostItem = ({ post }) => {
           </div>
           <span>{postData.scheduledFor}</span>
         </div>
+        
+        {/* Post status message */}
+        {postStatus && (
+          <div className={`mt-2 p-2 rounded text-sm ${
+            postStatus.type === 'success' ? 'bg-green-100 text-green-800 dark:bg-green-800/20 dark:text-green-400' : 
+            postStatus.type === 'error' ? 'bg-red-100 text-red-800 dark:bg-red-800/20 dark:text-red-400' : 
+            'bg-blue-100 text-blue-800 dark:bg-blue-800/20 dark:text-blue-400'
+          }`}>
+            {postStatus.message}
+          </div>
+        )}
       </div>
     </div>
   );
@@ -181,6 +251,12 @@ const TrashIcon = ({ className }) => (
   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className={className}>
     <path d="M3.375 3C2.339 3 1.5 3.84 1.5 4.875V5.25c0 1.036.84 1.875 1.875 1.875h17.25c1.035 0 1.875-.84 1.875-1.875V4.875C22.5 3.839 21.66 3 20.625 3H3.375z" />
     <path d="m3.087 9 .54 9.176A3 3 0 0 0 6.62 21h10.757a3 3 0 0 0 2.995-2.824L20.913 9H3.087zm6.133 2.845a.75.75 0 0 1 1.06 0l1.72 1.72 1.72-1.72a.75.75 0 1 1 1.06 1.06l-1.72 1.72 1.72 1.72a.75.75 0 1 1-1.06 1.06L12 15.685l-1.72 1.72a.75.75 0 1 1-1.06-1.06l1.72-1.72-1.72-1.72a.75.75 0 0 1 0-1.06z" />
+  </svg>
+);
+
+const InstagramIcon = ({ className }) => (
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className={className}>
+    <path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zM12 0C8.741 0 8.333.014 7.053.072 2.695.272.273 2.69.073 7.052.014 8.333 0 8.741 0 12c0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98C8.333 23.986 8.741 24 12 24c3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98C15.668.014 15.259 0 12 0z" />
   </svg>
 );
 

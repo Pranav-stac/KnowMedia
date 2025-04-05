@@ -6,7 +6,6 @@ import { useRouter } from 'next/navigation';
 import Navbar from '../components/layout/Navbar';
 import Sidebar from '../components/layout/Sidebar';
 import { getScheduledPosts, getProfiles, addScheduledPost, updateScheduledPost } from '@/lib/firebase';
-import { postToInstagram } from '@/lib/instagram';
 
 const CalendarView = () => {
   const router = useRouter();
@@ -29,9 +28,6 @@ const CalendarView = () => {
   const [generatedImage, setGeneratedImage] = useState('');
   const [promptInput, setPromptInput] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
-  const [isPosting, setIsPosting] = useState(false);
-  const [postingStatus, setPostingStatus] = useState(null);
-  const [selectedPostForAction, setSelectedPostForAction] = useState(null);
   
   // Fetch scheduled posts from Firebase
   useEffect(() => {
@@ -242,137 +238,6 @@ const CalendarView = () => {
     }
   };
   
-  // Function to handle posting to Instagram directly
-  const handlePostNow = async (post) => {
-    if (!post || !post.image || !post.profile || post.profile.platform !== 'instagram') {
-      alert('Cannot post: You need an image and an Instagram profile.');
-      return;
-    }
-    
-    try {
-      setIsPosting(true);
-      setSelectedPostForAction(post.id);
-      setPostingStatus({ type: 'info', message: 'Posting to Instagram...' });
-      
-      const result = await postToInstagram(post.image, post.title || post.description);
-      
-      setPostingStatus({ 
-        type: 'success', 
-        message: 'Posted successfully to Instagram!' 
-      });
-      
-      // Reset status after a few seconds
-      setTimeout(() => {
-        setPostingStatus(null);
-        setSelectedPostForAction(null);
-      }, 3000);
-    } catch (error) {
-      console.error('Error posting to Instagram:', error);
-      setPostingStatus({ 
-        type: 'error', 
-        message: `Failed to post: ${error.message}` 
-      });
-    } finally {
-      setIsPosting(false);
-    }
-  };
-  
-  // Function to handle posting all Instagram posts in sequence
-  const handlePostAllSequential = async () => {
-    // Filter for scheduled Instagram posts
-    const instagramPosts = scheduledPosts.filter(post => 
-      post.profile && 
-      post.profile.platform === 'instagram' && 
-      post.image
-    );
-    
-    if (instagramPosts.length === 0) {
-      alert('No Instagram posts with images found to post.');
-      return;
-    }
-    
-    // Confirm with the user
-    if (!confirm(`Are you sure you want to post all ${instagramPosts.length} Instagram posts now?`)) {
-      return;
-    }
-    
-    setIsPosting(true);
-    setPostingStatus({ 
-      type: 'info', 
-      message: `Starting to post ${instagramPosts.length} posts to Instagram...` 
-    });
-    
-    let successCount = 0;
-    let failCount = 0;
-    
-    for (let i = 0; i < instagramPosts.length; i++) {
-      const post = instagramPosts[i];
-      setSelectedPostForAction(post.id);
-      setPostingStatus({ 
-        type: 'info', 
-        message: `Posting ${i+1}/${instagramPosts.length}: "${post.title || 'Untitled'}"` 
-      });
-      
-      try {
-        // Post to Instagram
-        await postToInstagram(post.image, post.title || post.description);
-        
-        // Update success count
-        successCount++;
-        
-        // Update progress message
-        setPostingStatus({ 
-          type: 'info', 
-          message: `Posted ${i+1}/${instagramPosts.length}: "${post.title || 'Untitled'}" successfully. (${successCount} succeeded, ${failCount} failed)` 
-        });
-        
-        // Short pause between posts
-        await new Promise(resolve => setTimeout(resolve, 2000));
-        
-      } catch (error) {
-        console.error(`Error posting post ${i+1}:`, error);
-        
-        // Update fail count
-        failCount++;
-        
-        // Show error message but continue with next post
-        setPostingStatus({ 
-          type: 'error', 
-          message: `Failed to post "${post.title || 'Untitled'}": ${error.message}. Continuing with next post... (${successCount} succeeded, ${failCount} failed)` 
-        });
-        
-        // Longer pause after error
-        await new Promise(resolve => setTimeout(resolve, 3000));
-      }
-    }
-    
-    // Final status message
-    if (failCount === 0) {
-      setPostingStatus({ 
-        type: 'success', 
-        message: `Successfully posted all ${instagramPosts.length} posts to Instagram!` 
-      });
-    } else if (successCount === 0) {
-      setPostingStatus({ 
-        type: 'error', 
-        message: `Failed to post any of the ${instagramPosts.length} posts to Instagram.` 
-      });
-    } else {
-      setPostingStatus({ 
-        type: 'info', 
-        message: `Completed posting: ${successCount} succeeded, ${failCount} failed out of ${instagramPosts.length} total posts.` 
-      });
-    }
-    
-    setSelectedPostForAction(null);
-    setIsPosting(false);
-    
-    // Reset status after a longer time
-    setTimeout(() => {
-      setPostingStatus(null);
-    }, 10000);
-  };
-  
   const calendarDays = generateCalendarDays();
 
   return (
@@ -398,42 +263,17 @@ const CalendarView = () => {
               </button>
             </div>
             
-            <div className="flex items-center gap-2">
-              {/* Add Post All Instagram button */}
-              {selectedProfile && selectedProfile.platform === 'instagram' && (
-                <button 
-                  className="py-2 px-4 bg-[#E4405F] text-white rounded-lg hover:bg-[#d13752] transition-colors flex items-center gap-2"
-                  onClick={handlePostAllSequential}
-                  disabled={isPosting}
-                >
-                  {isPosting ? (
-                    <>
-                      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" className="w-4 h-4 animate-spin">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                      </svg>
-                      <span>Posting...</span>
-                    </>
-                  ) : (
-                    <>
-                      <InstagramIcon className="w-4 h-4" />
-                      <span>Post All Now</span>
-                    </>
-                  )}
-                </button>
-              )}
-              
-              <button 
-                className="py-2 px-4 bg-[var(--primary)] text-white rounded-lg hover:bg-[var(--primary-hover)] transition-colors flex items-center gap-2"
-                onClick={() => {
-                  setSelectedDay(new Date());
-                  resetPostForm();
-                  setIsCreateModalOpen(true);
-                }}
-              >
-                <PlusIcon className="w-4 h-4" />
-                <span>Schedule Post</span>
-              </button>
-            </div>
+            <button 
+              className="py-2 px-4 bg-[var(--primary)] text-white rounded-lg hover:bg-[var(--primary-hover)] transition-colors flex items-center gap-2"
+              onClick={() => {
+                setSelectedDay(new Date());
+                resetPostForm();
+                setIsCreateModalOpen(true);
+              }}
+            >
+              <PlusIcon className="w-4 h-4" />
+              <span>Schedule Post</span>
+            </button>
           </div>
           
           {/* Profile Filter */}
@@ -471,34 +311,6 @@ const CalendarView = () => {
               ))}
             </div>
           </div>
-          
-          {/* Global Status Indicator */}
-          {postingStatus && (
-            <div className={`mb-4 p-3 rounded-lg ${
-              postingStatus.type === 'success' ? 'bg-green-100 text-green-800 dark:bg-green-800/20 dark:text-green-400' : 
-              postingStatus.type === 'error' ? 'bg-red-100 text-red-800 dark:bg-red-800/20 dark:text-red-400' : 
-              'bg-blue-100 text-blue-800 dark:bg-blue-800/20 dark:text-blue-400'
-            }`}>
-              <div className="flex items-center gap-2">
-                {postingStatus.type === 'info' && (
-                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" className="w-5 h-5">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                )}
-                {postingStatus.type === 'success' && (
-                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" className="w-5 h-5">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                )}
-                {postingStatus.type === 'error' && (
-                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" className="w-5 h-5">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                )}
-                <span>{postingStatus.message}</span>
-              </div>
-            </div>
-          )}
           
           {/* Calendar */}
           <div className="bg-[var(--card)] rounded-xl border border-[var(--border)] overflow-hidden">
@@ -538,66 +350,13 @@ const CalendarView = () => {
                           {postsForDay.map((post, idx) => (
                             <div 
                               key={idx} 
-                              className="mb-2 text-xs p-1 rounded-md bg-[var(--background)] border border-[var(--border)] transition-colors hover:bg-[var(--background)]/80"
+                              className="text-xs p-1 rounded-md bg-[var(--primary)]/10 text-[var(--primary)] truncate cursor-move"
+                              title={post.title}
+                              draggable
+                              onDragStart={(e) => handleDragStart(e, post)}
+                              onDragEnd={handleDragEnd}
                             >
-                              <div className="flex items-center justify-between mb-1">
-                                <div className="flex items-center gap-1">
-                                  {post.profile?.platform && (
-                                    <div 
-                                      className="w-3 h-3 rounded-full flex-shrink-0"
-                                      style={{ 
-                                        backgroundColor: post.profile.platform === 'linkedin' ? '#0077B5' : 
-                                                        post.profile.platform === 'facebook' ? '#1877F2' : 
-                                                        post.profile.platform === 'instagram' ? '#E4405F' : '#6366f1' 
-                                      }}
-                                    ></div>
-                                  )}
-                                  <span className="font-medium truncate max-w-[100px]">{post.title || 'Scheduled Post'}</span>
-                                </div>
-                                <span className="text-[var(--muted)]">{post.time}</span>
-                              </div>
-                              
-                              <div className="flex justify-between items-center mt-1">
-                                {/* Existing drag handle and edit functionality */}
-                                <div 
-                                  className="cursor-move"
-                                  title={post.title}
-                                  draggable
-                                  onDragStart={(e) => handleDragStart(e, post)}
-                                  onDragEnd={handleDragEnd}
-                                >
-                                  <DragIcon className="w-3 h-3 text-[var(--muted)]" />
-                                </div>
-                                
-                                {/* Add Post Now button for Instagram posts */}
-                                {post.profile?.platform === 'instagram' && (
-                                  <button
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      handlePostNow(post);
-                                    }}
-                                    disabled={isPosting && selectedPostForAction === post.id}
-                                    className={`text-xs py-0.5 px-1.5 rounded ${
-                                      isPosting && selectedPostForAction === post.id
-                                        ? 'bg-[#E4405F]/50 text-white/70 cursor-not-allowed'
-                                        : 'bg-[#E4405F] text-white hover:bg-[#d13752]'
-                                    }`}
-                                  >
-                                    {isPosting && selectedPostForAction === post.id ? 'Posting...' : 'Post Now'}
-                                  </button>
-                                )}
-                              </div>
-                              
-                              {/* Status message */}
-                              {postingStatus && selectedPostForAction === post.id && (
-                                <div className={`mt-1 p-1 rounded-sm text-xs ${
-                                  postingStatus.type === 'success' ? 'bg-green-100 text-green-800 dark:bg-green-800/20 dark:text-green-400' : 
-                                  postingStatus.type === 'error' ? 'bg-red-100 text-red-800 dark:bg-red-800/20 dark:text-red-400' : 
-                                  'bg-blue-100 text-blue-800 dark:bg-blue-800/20 dark:text-blue-400'
-                                }`}>
-                                  {postingStatus.message}
-                                </div>
-                              )}
+                              {post.time}: {post.title}
                             </div>
                           ))}
                         </div>
@@ -963,18 +722,6 @@ const HeartIcon = ({ className }) => (
 const CommentIcon = ({ className }) => (
   <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" className={className}>
     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-  </svg>
-);
-
-const DragIcon = ({ className }) => (
-  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" className={className}>
-    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 9l4-4 4 4m0 6l-4 4-4-4" />
-  </svg>
-);
-
-const InstagramIcon = ({ className }) => (
-  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className={className}>
-    <path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zM12 0C8.741 0 8.333.014 7.053.072 2.695.272.273 2.69.073 7.052.014 8.333 0 8.741 0 12c0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98C8.333 23.986 8.741 24 12 24c3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98C15.668.014 15.259 0 12 0z" />
   </svg>
 );
 

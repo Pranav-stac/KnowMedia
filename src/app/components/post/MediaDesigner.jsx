@@ -2,36 +2,78 @@
 
 import { useState } from 'react';
 import Image from 'next/image';
+import { XIcon } from '@heroicons/react/24/outline';
+import { generateImage } from '@/lib/ai';
 
-const MediaDesigner = () => {
+const MediaDesigner = ({ onClose, onMediaGenerated }) => {
   const [activeTab, setActiveTab] = useState('ai');
-  const [generatedImage, setGeneratedImage] = useState('/images/desk-setup.jpg');
-  const [phoneImage, setPhoneImage] = useState('/images/phone-clock.jpg');
+  const [generatedImage, setGeneratedImage] = useState('https://images.unsplash.com/photo-1517245386807-bb43f82c33c4?ixlib=rb-4.0.3&auto=format&fit=crop&w=1350&q=80');
+  const [phoneImage, setPhoneImage] = useState('https://images.unsplash.com/photo-1605236453806-6ff36851218e?ixlib=rb-4.0.3&ixid=MnwxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8&auto=format&fit=crop&w=764&q=80');
   const [prompt, setPrompt] = useState('');
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [error, setError] = useState(null);
 
   const handleTabChange = (tab) => {
     setActiveTab(tab);
   };
 
-  const handleGenerateImage = () => {
-    console.log('Generating image with prompt:', prompt);
-    // In a real app, this would call an AI image generation API
-    setPrompt('');
+  const handleGenerateImage = async () => {
+    if (!prompt.trim()) return;
+    
+    setIsGenerating(true);
+    setError(null);
+    
+    try {
+      // Store current image as fallback
+      const currentImage = generatedImage;
+      
+      const imageUrl = await generateImage(prompt);
+      
+      // Check if we got a valid image URL back
+      if (imageUrl) {
+        setGeneratedImage(imageUrl);
+        setPrompt('');
+      } else {
+        throw new Error("Failed to generate image");
+      }
+    } catch (err) {
+      console.error('Error generating image:', err);
+      setError('Failed to generate image. Using default image.');
+      // Don't change the current image on error
+    } finally {
+      setIsGenerating(false);
+    }
+  };
+
+  // Update handleImageError function
+  const handleImageError = () => {
+    console.warn('Generated image failed to load');
+    setError('Image failed to load. Using default image.');
+    setGeneratedImage('https://images.unsplash.com/photo-1535957998253-26ae1ef29506?ixlib=rb-4.0.3&auto=format&fit=crop&w=1350&q=80');
   };
 
   const handleUseMedia = () => {
-    console.log('Using media in post');
-    // This would add the media to the post being created
+    onMediaGenerated?.({
+      type: 'image',
+      url: generatedImage,
+      source: 'ai-generated'
+    });
   };
 
   return (
     <div className="flex-1 p-4">
-      <div className="bg-[var(--card)] rounded-xl border border-[var(--border)] overflow-hidden h-full flex flex-col">
-        <div className="p-6 border-b border-[var(--border)]">
+      <div className="bg-[var(--card)] rounded-xl border border-[var(--border)] h-full flex flex-col">
+        <div className="p-6 border-b border-[var(--border)] flex items-center justify-between">
           <h2 className="text-xl font-semibold">Design Media</h2>
+          <button 
+            onClick={onClose}
+            className="text-[var(--muted)] hover:text-[var(--foreground)] transition-colors"
+          >
+            <XIcon className="w-6 h-6" />
+          </button>
         </div>
         
-        <div className="grid grid-cols-5 h-full">
+        <div className="grid grid-cols-5 flex-1">
           {/* Sidebar menu */}
           <div className="border-r border-[var(--border)] p-4 space-y-8">
             <MediaTab 
@@ -96,10 +138,14 @@ const MediaDesigner = () => {
                     <button 
                       className="w-full py-2 bg-[var(--secondary)] hover:bg-[var(--secondary-hover)] text-white rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                       onClick={handleGenerateImage}
-                      disabled={!prompt.trim()}
+                      disabled={!prompt.trim() || isGenerating}
                     >
-                      Generate
+                      {isGenerating ? 'Generating...' : 'Generate'}
                     </button>
+                    
+                    {error && (
+                      <p className="text-red-500 text-sm mt-2">{error}</p>
+                    )}
                   </div>
                 </div>
                 
@@ -121,17 +167,27 @@ const MediaDesigner = () => {
                   
                   {/* Primary image */}
                   <div className="rounded-lg overflow-hidden border border-[var(--border)] relative group">
-                    <Image
-                      src={generatedImage}
-                      alt="Generated image"
-                      fill
-                      className="object-cover"
-                    />
-                    <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-30 transition-all flex items-center justify-center opacity-0 group-hover:opacity-100">
-                      <button className="px-6 py-3 bg-[var(--primary)] text-white rounded-md hover:bg-[var(--primary-hover)] transition-colors transform scale-90 group-hover:scale-100" onClick={handleUseMedia}>
-                        Use this media
-                      </button>
-                    </div>
+                    {isGenerating ? (
+                      <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-30">
+                        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-[var(--primary)]"></div>
+                      </div>
+                    ) : (
+                      <>
+                        <Image
+                          src={generatedImage}
+                          alt="Generated image"
+                          fill
+                          className="object-cover"
+                          onError={handleImageError}
+                          unoptimized
+                        />
+                        <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-30 transition-all flex items-center justify-center opacity-0 group-hover:opacity-100">
+                          <button className="px-6 py-3 bg-[var(--primary)] text-white rounded-md hover:bg-[var(--primary-hover)] transition-colors transform scale-90 group-hover:scale-100" onClick={handleUseMedia}>
+                            Use this media
+                          </button>
+                        </div>
+                      </>
+                    )}
                   </div>
                 </div>
               </div>
