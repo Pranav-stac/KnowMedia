@@ -1,0 +1,7 @@
+This directory contains image assets for the application.
+
+In a production environment, these would be dynamically generated or stored images.
+
+For the demo, you'll need to provide images with filenames:
+- desk-setup.jpg (an image of a desk with productivity items)
+- phone-clock.jpg (an image of a phone displaying a clock) 

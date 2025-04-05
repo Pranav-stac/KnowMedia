@@ -1,0 +1,8 @@
+This directory contains avatar images for user profiles.
+
+In a production environment, these would be actual user profile images stored in a more appropriate location.
+
+For the demo, you'll need to provide images with filenames:
+- daniel-linkedin.jpg
+- daniel-facebook.jpg
+- daniel-instagram.jpg 
