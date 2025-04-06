@@ -5,7 +5,7 @@ import Image from 'next/image';
 import Navbar from '../components/layout/Navbar';
 import Sidebar from '../components/layout/Sidebar';
 import { getProfiles, getPosts, addPost, updatePost } from '@/lib/firebase';
-import { postToInstagram, postStoryToInstagram, createHighlightOnInstagram } from '@/lib/instagram';
+import { postToInstagram, postStoryToInstagram, createHighlightOnInstagram, postReelToInstagram } from '@/lib/instagram';
 
 const ManageFeedPage = () => {
   const [profiles, setProfiles] = useState([]);
@@ -17,14 +17,6 @@ const ManageFeedPage = () => {
   const [feedView, setFeedView] = useState('grid'); // 'grid' or 'list'
   const [isGenerating, setIsGenerating] = useState(false);
   const [aiPrompt, setAiPrompt] = useState('');
-  const [highlights, setHighlights] = useState([]);
-  const [selectedHighlight, setSelectedHighlight] = useState(null);
-  const [isAddHighlightOpen, setIsAddHighlightOpen] = useState(false);
-  const [newHighlight, setNewHighlight] = useState({
-    name: '',
-    image: null
-  });
-  
   const [newPost, setNewPost] = useState({
     title: '',
     description: '',
@@ -50,6 +42,17 @@ const ManageFeedPage = () => {
   const [postingId, setPostingId] = useState(null);
   const [postStatus, setPostStatus] = useState(null);
   const [postingStatus, setPostingStatus] = useState(null);
+  const [isAddHighlightOpen, setIsAddHighlightOpen] = useState(false); // Added missing state
+  const [highlights, setHighlights] = useState([]); // Added missing state for highlights
+  const [selectedHighlight, setSelectedHighlight] = useState(null); // Added missing state
+  const [newHighlight, setNewHighlight] = useState({ name: '', image: null }); // Added missing state
+  const [isAddReelModalOpen, setIsAddReelModalOpen] = useState(false);
+  const [newReelData, setNewReelData] = useState({ 
+    title: '', 
+    caption: '', 
+    videoSrc: null, 
+    coverImageSrc: null 
+  });
   
   // Fetch profiles and posts
   useEffect(() => {
@@ -239,11 +242,20 @@ const ManageFeedPage = () => {
       setPostingId(post.id);
       setPostStatus({ type: 'info', message: 'Posting to Instagram...' });
       
-      const result = await postToInstagram(post.image, post.title || post.description);
+      let result;
+      // Check if it's a reel draft and post accordingly
+      if (post.type === 'reel' && post.videoSrc) {
+        setPostStatus({ type: 'info', message: 'Posting Reel to Instagram...' });
+        result = await postReelToInstagram(post.videoSrc, post.title || post.description);
+      } else {
+        // Assume it's a regular image post
+        setPostStatus({ type: 'info', message: 'Posting Photo to Instagram...' });
+        result = await postToInstagram(post.image, post.title || post.description);
+      }
       
       setPostStatus({ 
         type: 'success', 
-        message: 'Posted successfully to Instagram!' 
+        message: `Posted successfully to Instagram! ${post.type === 'reel' ? '(Reel)' : '(Photo)'}` 
       });
       
       // Reset status after a few seconds
@@ -283,17 +295,31 @@ const ManageFeedPage = () => {
             >
               {feedView === 'grid' ? (
                 <div className="relative w-full h-full">
-                  <Image 
-                    src={post.image} 
-                    alt={post.title} 
-                    fill
-                    className="object-cover"
-                    unoptimized={post.image?.startsWith('data:')}
-                  />
+                  {typeof post.image === 'string' && post.image ? (
+                    <Image 
+                      src={post.image}
+                      alt={post.title || 'Post Image'}
+                      fill
+                      className="object-cover"
+                      unoptimized={post.image?.startsWith('data:')}
+                      priority={index < 6} // Prioritize loading initial images
+                    />
+                  ) : (
+                    <div className="w-full h-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center">
+                      <ImageIcon className="w-10 h-10 text-gray-400 dark:text-gray-500" />
+                    </div>
+                  )}
                   
                   {/* Post Now button - shown on hover for Instagram posts in grid view */}
                   {selectedProfile?.platform === 'instagram' && (
                     <div className="absolute inset-0 bg-black/70 opacity-0 group-hover:opacity-100 flex flex-col items-center justify-center transition-opacity">
+                      {/* Add Reel indicator if post type is reel */}
+                      {post.type === 'reel' && (
+                        <span className="absolute top-2 right-2 bg-black/60 text-white text-[10px] px-1.5 py-0.5 rounded-full flex items-center gap-1">
+                          <ReelIcon className="w-2.5 h-2.5"/>
+                          REEL
+                        </span>
+                      )}
                       <button
                         onClick={(e) => handlePostNow(post, e)}
                         disabled={isPosting && postingId === post.id}
@@ -322,17 +348,31 @@ const ManageFeedPage = () => {
               ) : (
                 <div>
                   <div className="relative aspect-video w-full">
-                    <Image 
-                      src={post.image} 
-                      alt={post.title} 
-                      fill
-                      className="object-cover"
-                      unoptimized={post.image?.startsWith('data:')}
-                    />
+                    {typeof post.image === 'string' && post.image ? (
+                      <Image 
+                        src={post.image}
+                        alt={post.title || 'Post Image'}
+                        fill
+                        className="object-cover"
+                        unoptimized={post.image?.startsWith('data:')}
+                      />
+                    ) : (
+                      <div className="w-full h-full aspect-video bg-gray-200 dark:bg-gray-700 flex items-center justify-center">
+                        <ImageIcon className="w-10 h-10 text-gray-400 dark:text-gray-500" />
+                      </div>
+                    )}
                   </div>
                   <div className="p-4">
                     <h3 className="font-bold mb-2">{post.title}</h3>
                     <p className="text-[var(--muted)] text-sm line-clamp-2">{post.description}</p>
+                    
+                    {/* Add Reel indicator if post type is reel */} 
+                    {post.type === 'reel' && (
+                      <span className="inline-flex items-center gap-1 bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 px-2 py-0.5 rounded-full text-xs font-medium my-2">
+                        <ReelIcon className="w-3 h-3"/>
+                        Reel
+                      </span>
+                    )}
                     
                     <div className="flex flex-wrap gap-1 mt-2">
                       {post.hashtags?.map((tag, index) => (
@@ -805,13 +845,26 @@ const ManageFeedPage = () => {
                         className="aspect-square relative cursor-pointer group"
                         onClick={() => handlePostClick(post)}
                       >
-                        <Image 
-                          src={post.image} 
-                          alt={post.title} 
-                          fill
-                          className="object-cover"
-                          unoptimized={post.image?.startsWith('data:')}
-                        />
+                        {typeof post.image === 'string' && post.image ? (
+                          <Image 
+                            src={post.image}
+                            alt={post.title || 'Post Image'}
+                            fill
+                            className="object-cover"
+                            unoptimized={post.image?.startsWith('data:')}
+                            priority={index < 9} // Prioritize loading initial images
+                          />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center">
+                             <ImageIcon className="w-10 h-10 text-gray-600" />
+                          </div>
+                        )}
+                        {/* Add Reel indicator */} 
+                        {post.type === 'reel' && (
+                          <span className="absolute top-1 right-1 bg-black/60 text-white text-[10px] p-0.5 rounded-sm">
+                            <ReelIcon className="w-3 h-3"/>
+                          </span>
+                        )}
                         
                         {/* Post Now button - appears on hover */}
                         <div className="absolute inset-0 bg-black/70 opacity-0 group-hover:opacity-100 flex flex-col items-center justify-center transition-opacity">
@@ -1600,15 +1653,28 @@ const renderLinkedInView = () => {
                           </div>
                         </div>
                         <p className="text-sm mb-3">{post.description}</p>
+                        {/* Add Reel indicator if post type is reel */}
+                        {post.type === 'reel' && (
+                          <span className="inline-flex items-center gap-1 bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full text-xs font-medium mb-2">
+                            <ReelIcon className="w-3 h-3"/>
+                            Reel (Video not shown)
+                          </span>
+                        )}
                       </div>
                       <div className="relative aspect-video w-full">
-                        <Image 
-                          src={post.image} 
-                          alt={post.title} 
-                          fill
-                          className="object-cover"
-                          unoptimized={post.image?.startsWith('data:')}
-                        />
+                        {typeof post.image === 'string' && post.image ? (
+                          <Image 
+                            src={post.image}
+                            alt={post.title || 'Post Image'}
+                            fill
+                            className="object-cover"
+                            unoptimized={post.image?.startsWith('data:')}
+                          />
+                        ) : (
+                          <div className="w-full h-full aspect-video bg-gray-200 dark:bg-gray-700 flex items-center justify-center">
+                            <ImageIcon className="w-10 h-10 text-gray-400 dark:text-gray-500" />
+                          </div>
+                        )}
                       </div>
                       <div className="p-4 border-t">
                         <div className="flex justify-between text-gray-600">
@@ -1957,6 +2023,188 @@ const handleCreateAllHighlights = async () => {
   }, 5000);
 };
 
+// Function to post reels in sequence
+const handlePostAllReels = async () => {
+  if (!selectedProfile || selectedProfile.platform !== 'instagram') {
+    alert('You need to select an Instagram profile to post reels');
+    return;
+  }
+  
+  // For demo purposes, we'll use the first 3 posts as reels
+  // In a real app, you'd filter for video posts or have a dedicated reels collection
+  const reelsToPost = filteredPosts
+    .slice(0, 3) // Take first 3 for demo
+    .filter(post => typeof post.image === 'string' && post.image); // Filter out posts with invalid image/video source
+  
+  if (reelsToPost.length === 0) {
+    alert('No eligible Instagram posts found to use as reels');
+    return;
+  }
+  
+  // Confirm with the user
+  if (!confirm(`Are you sure you want to post ${reelsToPost.length} reels to Instagram?`)) {
+    return;
+  }
+  
+  setIsPosting(true);
+  setPostStatus({ 
+    type: 'info', 
+    message: `Starting to post ${reelsToPost.length} reels to Instagram...` 
+  });
+  
+  let successCount = 0;
+  let failCount = 0;
+  
+  for (let i = 0; i < reelsToPost.length; i++) {
+    const reel = reelsToPost[i];
+    setPostingId(reel.id);
+    setPostStatus({ 
+      type: 'info', 
+      message: `Posting reel ${i+1}/${reelsToPost.length}...` 
+    });
+    
+    try {
+      // Add check for valid image/video source before posting
+      if (!reel.image) {
+        console.warn(`Skipping reel post ${i+1} due to invalid source.`);
+        failCount++; // Optionally count this as a failure
+        setPostStatus({
+          type: 'warning', 
+          message: `Skipped reel ${i+1}/${reelsToPost.length}: Invalid media source.`
+        });
+        continue; // Skip to the next iteration
+      }
+      
+      // Post to Instagram as a reel
+      await postReelToInstagram(reel.image, reel.title || reel.description); // Assuming reel.image is video data
+      
+      // Update success count
+      successCount++;
+      
+      // Update progress message
+      setPostStatus({ 
+        type: 'info', 
+        message: `Posted reel ${i+1}/${reelsToPost.length} successfully. (${successCount} succeeded, ${failCount} failed)` 
+      });
+      
+      // Short pause between posts
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      
+    } catch (error) {
+      console.error(`Error posting reel ${i+1}:`, error);
+      
+      // Update fail count
+      failCount++;
+      
+      // Show error message but continue with next post
+      setPostStatus({ 
+        type: 'error', 
+        message: `Failed to post reel ${i+1}: ${error.message}. Continuing with next reel... (${successCount} succeeded, ${failCount} failed)` 
+      });
+      
+      // Longer pause after error
+      await new Promise(resolve => setTimeout(resolve, 3000));
+    }
+  }
+  
+  // Final status message
+  if (failCount === 0) {
+    setPostStatus({ 
+      type: 'success', 
+      message: `Successfully posted all ${reelsToPost.length} reels to Instagram!` 
+    });
+  } else if (successCount === 0) {
+    setPostStatus({ 
+      type: 'error', 
+      message: `Failed to post any of the ${reelsToPost.length} reels to Instagram.` 
+    });
+  } else {
+    setPostStatus({ 
+      type: 'info', 
+      message: `Completed posting reels: ${successCount} succeeded, ${failCount} failed out of ${reelsToPost.length} total.` 
+    });
+  }
+  
+  setPostingId(null);
+  setIsPosting(false);
+  
+  // Reset status after a longer time
+  setTimeout(() => {
+    setPostStatus(null);
+  }, 10000);
+};
+
+const handleAddReelClick = () => {
+  setNewReelData({ title: '', caption: '', videoSrc: null, coverImageSrc: null });
+  setIsAddReelModalOpen(true);
+};
+
+const handleVideoUpload = (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  // Basic validation (optional: add more specific video types)
+  if (!file.type.startsWith('video/')) {
+    alert('Please select a valid video file.');
+    return;
+  }
+  const reader = new FileReader();
+  reader.onload = (event) => {
+    setNewReelData(prev => ({ ...prev, videoSrc: event.target.result }));
+  };
+  reader.readAsDataURL(file);
+  e.target.value = ''; // Reset file input
+};
+
+const handleCoverImageUpload = (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  if (!file.type.startsWith('image/')) {
+    alert('Please select a valid image file for the cover.');
+    return;
+  }
+  const reader = new FileReader();
+  reader.onload = (event) => {
+    setNewReelData(prev => ({ ...prev, coverImageSrc: event.target.result }));
+  };
+  reader.readAsDataURL(file);
+  e.target.value = ''; // Reset file input
+};
+
+const handleSaveReelDraft = async () => {
+  if (!selectedProfile || !newReelData.videoSrc || !newReelData.coverImageSrc) {
+    alert('Please select a video and a cover image for the reel.');
+    return;
+  }
+
+  try {
+    const reelToAdd = {
+      type: 'reel', // Identify as reel
+      title: newReelData.title,
+      description: newReelData.caption,
+      image: newReelData.coverImageSrc, // Cover image goes here
+      videoSrc: newReelData.videoSrc,  // Video data stored separately
+      author: {
+        id: selectedProfile.id,
+        name: selectedProfile.name,
+        platform: selectedProfile.platform,
+        avatar: selectedProfile.avatar
+      },
+      likes: 0,
+      comments: 0,
+      timestamp: new Date().toISOString(),
+      status: 'Draft' // Saved as draft initially
+    };
+
+    await addPost(reelToAdd); // Use existing addPost function
+    setIsAddReelModalOpen(false);
+    setNewReelData({ title: '', caption: '', videoSrc: null, coverImageSrc: null }); // Reset form
+    // Maybe add a success notification
+  } catch (error) {
+    console.error('Error saving reel draft:', error);
+    alert('Failed to save reel draft. Please try again.');
+  }
+};
+
 return (
   <div className="flex h-screen">
     <Sidebar />
@@ -2112,9 +2360,39 @@ return (
                       </>
                     )}
                   </button>
+                  
+                  {/* Added Post All Reels Button */}
+                  <button
+                    disabled={isPosting}
+                    onClick={handlePostAllReels}
+                    className={`py-2 px-4 text-white rounded-lg flex items-center gap-2 ${ 
+                      isPosting ? 'bg-[#E4405F]/50 cursor-not-allowed' : 'bg-[#E4405F] hover:bg-[#d13752]' 
+                    }`}
+                  >
+                    {isPosting ? (
+                      <>
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" className="w-4 h-4 animate-spin">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                        </svg>
+                        <span>Posting Reels...</span>
+                      </>
+                    ) : (
+                      <>
+                        <ReelIcon className="w-4 h-4" />
+                        <span>Post All Reels</span>
+                      </>
+                    )}
+                  </button>
                 </div>
               </div>
             )}
+            <button
+              className="py-2 px-4 bg-[var(--primary)] text-white rounded-lg hover:bg-[var(--primary-hover)] transition-colors flex items-center gap-2"
+              onClick={handleAddReelClick} // New button to add reel
+            >
+              <ReelIcon className="w-4 h-4" />
+              <span>Add Reel</span>
+            </button>
             <button
               className="py-2 px-4 bg-[var(--primary)] text-white rounded-lg hover:bg-[var(--primary-hover)] transition-colors flex items-center gap-2"
               onClick={handleAddPostClick}
@@ -2261,14 +2539,20 @@ return (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {/* Image Section */}
             <div className="space-y-4">
-              <div className="relative aspect-square w-full rounded-lg overflow-hidden border border-[var(--border)]">
-                <Image 
-                  src={selectedPost.image} 
-                  alt={selectedPost.title} 
-                  fill
-                  className="object-cover"
-                  unoptimized={selectedPost.image?.startsWith('data:')}
-                />
+              <div className="relative aspect-square w-full rounded-lg overflow-hidden border border-[var(--border)] bg-gray-200 dark:bg-gray-700">
+                {typeof selectedPost.image === 'string' && selectedPost.image ? (
+                  <Image 
+                    src={selectedPost.image}
+                    alt={selectedPost.title || 'Post Image'}
+                    fill
+                    className="object-cover"
+                    unoptimized={selectedPost.image?.startsWith('data:')}
+                  />
+                ) : (
+                  <div className="w-full h-full flex items-center justify-center">
+                    <ImageIcon className="w-16 h-16 text-gray-400 dark:text-gray-500" />
+                  </div>
+                )}
               </div>
               
               <div>
@@ -2446,10 +2730,10 @@ return (
             {/* Image Section */}
             <div className="space-y-4">
               <div className="relative aspect-square w-full rounded-lg overflow-hidden border border-[var(--border)] bg-[var(--background)]">
-                {newPost.image ? (
+                {typeof newPost.image === 'string' && newPost.image ? (
                   <Image 
-                    src={newPost.image} 
-                    alt="New post" 
+                    src={newPost.image}
+                    alt="New post"
                     fill
                     className="object-cover"
                     unoptimized={newPost.image?.startsWith('data:')}
@@ -2620,6 +2904,140 @@ return (
         </div>
       </div>
     )}
+
+    {/* Add Reel Modal */}
+    {isAddReelModalOpen && (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+        <div className="bg-[var(--card)] rounded-xl p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto shadow-xl">
+          <div className="flex justify-between items-center mb-4">
+            <h2 className="text-xl font-bold">Add New Reel Draft</h2>
+            <button 
+              onClick={() => setIsAddReelModalOpen(false)}
+              className="text-[var(--muted)] hover:text-[var(--foreground)] transition-colors"
+            >
+              <XIcon className="w-6 h-6" />
+            </button>
+          </div>
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {/* Video & Cover Upload Section */}
+            <div className="space-y-4">
+              {/* Video Upload */}
+              <div>
+                <label className="block text-sm font-medium mb-2">Reel Video</label>
+                <div className="relative aspect-video w-full rounded-lg overflow-hidden border border-[var(--border)] bg-[var(--background)] mb-2">
+                  {newReelData.videoSrc ? (
+                    <video controls src={newReelData.videoSrc} className="w-full h-full object-contain" />
+                  ) : (
+                    <div className="flex flex-col items-center justify-center h-full">
+                      <ReelIcon className="w-12 h-12 text-[var(--muted)] mb-2" />
+                      <p className="text-[var(--muted)] text-sm">No video selected</p>
+                    </div>
+                  )}
+                </div>
+                <input 
+                  type="file" 
+                  accept="video/*" 
+                  onChange={handleVideoUpload}
+                  className="hidden" 
+                  id="new-reel-video" 
+                />
+                <label 
+                  htmlFor="new-reel-video"
+                  className="w-full py-2 px-4 bg-[var(--background)] hover:bg-[var(--border)] transition-colors border border-[var(--border)] rounded-lg flex items-center justify-center gap-2 cursor-pointer text-sm"
+                >
+                  <UploadIcon className="w-5 h-5" />
+                  <span>Upload Video</span>
+                </label>
+              </div>
+
+              {/* Cover Image Upload */}
+              <div>
+                <label className="block text-sm font-medium mb-2">Cover Image</label>
+                 <div className="relative aspect-square w-full rounded-lg overflow-hidden border border-[var(--border)] bg-[var(--background)] mb-2">
+                  {newReelData.coverImageSrc ? (
+                    <Image 
+                      src={newReelData.coverImageSrc}
+                      alt="Reel cover preview"
+                      fill
+                      className="object-cover"
+                      unoptimized
+                    />
+                  ) : (
+                    <div className="flex flex-col items-center justify-center h-full">
+                      <ImageIcon className="w-12 h-12 text-[var(--muted)] mb-2" />
+                      <p className="text-[var(--muted)] text-sm">No cover selected</p>
+                    </div>
+                  )}
+                </div>
+                <input 
+                  type="file" 
+                  accept="image/*" 
+                  onChange={handleCoverImageUpload}
+                  className="hidden" 
+                  id="new-reel-cover"
+                />
+                 <label 
+                  htmlFor="new-reel-cover"
+                  className="w-full py-2 px-4 bg-[var(--background)] hover:bg-[var(--border)] transition-colors border border-[var(--border)] rounded-lg flex items-center justify-center gap-2 cursor-pointer text-sm"
+                >
+                  <UploadIcon className="w-5 h-5" />
+                  <span>Upload Cover Image</span>
+                </label>
+              </div>
+            </div>
+
+            {/* Form Section */}
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium mb-2" htmlFor="new-reel-title">
+                  Title (Optional)
+                </label>
+                <input
+                  type="text"
+                  id="new-reel-title"
+                  value={newReelData.title}
+                  onChange={(e) => setNewReelData({...newReelData, title: e.target.value})}
+                  className="w-full p-2 rounded-lg bg-[var(--background)] border border-[var(--border)] focus:outline-none focus:ring-2 focus:ring-[var(--primary)]"
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium mb-2" htmlFor="new-reel-caption">
+                  Caption (Optional)
+                </label>
+                <textarea
+                  id="new-reel-caption"
+                  value={newReelData.caption}
+                  onChange={(e) => setNewReelData({...newReelData, caption: e.target.value})}
+                  className="w-full p-2 rounded-lg bg-[var(--background)] border border-[var(--border)] focus:outline-none focus:ring-2 focus:ring-[var(--primary)] min-h-[100px]"
+                ></textarea>
+              </div>
+              {/* Add AI generator or other fields if needed */}
+            </div>
+          </div>
+          
+          {/* Action Buttons */}
+          <div className="flex justify-end gap-3 mt-6">
+            <button
+              type="button"
+              onClick={() => setIsAddReelModalOpen(false)}
+              className="py-2 px-4 bg-[var(--background)] hover:bg-[var(--border)] transition-colors border border-[var(--border)] rounded-lg"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={handleSaveReelDraft}
+              disabled={!newReelData.videoSrc || !newReelData.coverImageSrc} // Require video and cover
+              className="py-2 px-4 bg-[var(--primary)] text-white rounded-lg hover:bg-[var(--primary-hover)] transition-colors disabled:opacity-50"
+            >
+              Save Reel Draft
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
   </div>
 );
 };
@@ -2715,6 +3133,13 @@ const StoriesIcon = ({ className }) => (
 const HighlightIcon = ({ className }) => (
   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className={className}>
     <path d="M12 2L9.19 8.62L2 9.24L7.45 14.14L5.82 21L12 17.27L18.18 21L16.54 14.14L22 9.24L14.81 8.62L12 2Z" />
+  </svg>
+);
+
+// Add the ReelIcon component near the other icon components
+const ReelIcon = ({ className }) => (
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className={className}>
+    <path d="M8 5v14l11-7z" />
   </svg>
 );
 
