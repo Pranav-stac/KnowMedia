@@ -5,7 +5,7 @@ import CalendarGrid from '../components/calendar/CalendarGrid';
 import PostCreator from '../components/post/PostCreator';
 import Navbar from '../components/layout/Navbar';
 import Sidebar from '../components/layout/Sidebar';
-import { postToInstagram, postStoryToInstagram, createHighlightOnInstagram } from '@/lib/instagram';
+import { postToInstagram, postStoryToInstagram } from '@/lib/instagram';
 
 const FeedPage = () => {
   const [activeView, setActiveView] = useState('calendar'); // 'calendar' or 'create'

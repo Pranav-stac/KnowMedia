@@ -1,156 +1,113 @@
-const DemographicsReport = ({ platform = 'all' }) => {
+'use client';
+
+import { Card, Title, Text, DonutChart, BarChart, Grid } from '@tremor/react';
+import { UserGroupIcon, GlobeAltIcon, HashtagIcon } from '@heroicons/react/24/outline';
+
+export default function DemographicsReport({ platform }) {
+  // Sample data - replace with actual data from your API
+  const ageData = [
+    { name: '18-24', value: 35 },
+    { name: '25-34', value: 45 },
+    { name: '35-44', value: 15 },
+    { name: '45-54', value: 3 },
+    { name: '55+', value: 2 }
+  ];
+
+  const genderData = [
+    { name: 'Male', value: 48 },
+    { name: 'Female', value: 51 },
+    { name: 'Other', value: 1 }
+  ];
+
+  const locationData = [
+    { name: 'United States', value: 45, followers: 220 },
+    { name: 'United Kingdom', value: 25, followers: 122 },
+    { name: 'Canada', value: 15, followers: 73 },
+    { name: 'Australia', value: 15, followers: 73 }
+  ];
+
+  const interestData = [
+    { name: 'Technology', value: 68 },
+    { name: 'Business', value: 54 },
+    { name: 'Marketing', value: 47 },
+    { name: 'Design', value: 42 },
+    { name: 'Startups', value: 38 }
+  ];
+
   return (
     <div className="space-y-6">
-      {/* Age Distribution */}
-      <div className="bg-[var(--card)] rounded-xl p-6 border border-[var(--border)]">
-        <h3 className="text-lg font-semibold mb-4">Age Distribution</h3>
-        <div className="space-y-3">
-          <div>
-            <div className="flex justify-between mb-1">
-              <span className="text-sm text-[var(--muted)]">18-24</span>
-              <span className="text-sm font-medium">28%</span>
-            </div>
-            <div className="h-2 bg-[var(--border)] rounded-full">
-              <div className="h-full bg-blue-500 rounded-full" style={{ width: '28%' }}></div>
-            </div>
+      <Grid numItems={1} numItemsSm={2} className="gap-6">
+        {/* Age Distribution */}
+        <Card className="p-4">
+          <Title>Age Distribution</Title>
+          <div className="mt-4 h-[300px] w-full">
+            <DonutChart
+              data={ageData}
+              category="value"
+              index="name"
+              valueFormatter={(value) => `${value}%`}
+              colors={["blue", "cyan", "indigo", "violet", "purple"]}
+              height="100%"
+            />
           </div>
-          <div>
-            <div className="flex justify-between mb-1">
-              <span className="text-sm text-[var(--muted)]">25-34</span>
-              <span className="text-sm font-medium">42%</span>
-            </div>
-            <div className="h-2 bg-[var(--border)] rounded-full">
-              <div className="h-full bg-blue-500 rounded-full" style={{ width: '42%' }}></div>
-            </div>
-          </div>
-          <div>
-            <div className="flex justify-between mb-1">
-              <span className="text-sm text-[var(--muted)]">35-44</span>
-              <span className="text-sm font-medium">18%</span>
-            </div>
-            <div className="h-2 bg-[var(--border)] rounded-full">
-              <div className="h-full bg-blue-500 rounded-full" style={{ width: '18%' }}></div>
-            </div>
-          </div>
-          <div>
-            <div className="flex justify-between mb-1">
-              <span className="text-sm text-[var(--muted)]">45-54</span>
-              <span className="text-sm font-medium">8%</span>
-            </div>
-            <div className="h-2 bg-[var(--border)] rounded-full">
-              <div className="h-full bg-blue-500 rounded-full" style={{ width: '8%' }}></div>
-            </div>
-          </div>
-          <div>
-            <div className="flex justify-between mb-1">
-              <span className="text-sm text-[var(--muted)]">55+</span>
-              <span className="text-sm font-medium">4%</span>
-            </div>
-            <div className="h-2 bg-[var(--border)] rounded-full">
-              <div className="h-full bg-blue-500 rounded-full" style={{ width: '4%' }}></div>
-            </div>
-          </div>
-        </div>
-      </div>
+        </Card>
 
-      {/* Gender Distribution */}
-      <div className="bg-[var(--card)] rounded-xl p-6 border border-[var(--border)]">
-        <h3 className="text-lg font-semibold mb-4">Gender Distribution</h3>
-        <div className="grid grid-cols-3 gap-4">
-          <div className="bg-[var(--background)] rounded-lg p-4 text-center">
-            <p className="text-2xl font-bold mb-1">48%</p>
-            <p className="text-sm text-[var(--muted)]">Male</p>
+        {/* Gender Distribution */}
+        <Card className="p-4">
+          <Title>Gender Distribution</Title>
+          <div className="mt-4 h-[300px] w-full">
+            <DonutChart
+              data={genderData}
+              category="value"
+              index="name"
+              valueFormatter={(value) => `${value}%`}
+              colors={["blue", "pink", "purple"]}
+              height="100%"
+            />
           </div>
-          <div className="bg-[var(--background)] rounded-lg p-4 text-center">
-            <p className="text-2xl font-bold mb-1">51%</p>
-            <p className="text-sm text-[var(--muted)]">Female</p>
-          </div>
-          <div className="bg-[var(--background)] rounded-lg p-4 text-center">
-            <p className="text-2xl font-bold mb-1">1%</p>
-            <p className="text-sm text-[var(--muted)]">Other</p>
-          </div>
-        </div>
-      </div>
+        </Card>
+      </Grid>
 
-      {/* Location Distribution */}
-      <div className="bg-[var(--card)] rounded-xl p-6 border border-[var(--border)]">
-        <h3 className="text-lg font-semibold mb-4">Top Locations</h3>
-        <div className="space-y-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="w-8 h-8 bg-[var(--background)] rounded-full flex items-center justify-center text-sm">🇺🇸</div>
-              <div>
-                <p className="font-medium">United States</p>
-                <p className="text-sm text-[var(--muted)]">42% of audience</p>
-              </div>
-            </div>
-            <div className="text-sm font-medium">156,847 followers</div>
-          </div>
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="w-8 h-8 bg-[var(--background)] rounded-full flex items-center justify-center text-sm">🇬🇧</div>
-              <div>
-                <p className="font-medium">United Kingdom</p>
-                <p className="text-sm text-[var(--muted)]">18% of audience</p>
-              </div>
-            </div>
-            <div className="text-sm font-medium">67,234 followers</div>
-          </div>
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="w-8 h-8 bg-[var(--background)] rounded-full flex items-center justify-center text-sm">🇨🇦</div>
-              <div>
-                <p className="font-medium">Canada</p>
-                <p className="text-sm text-[var(--muted)]">12% of audience</p>
-              </div>
-            </div>
-            <div className="text-sm font-medium">44,823 followers</div>
-          </div>
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="w-8 h-8 bg-[var(--background)] rounded-full flex items-center justify-center text-sm">🇦🇺</div>
-              <div>
-                <p className="font-medium">Australia</p>
-                <p className="text-sm text-[var(--muted)]">8% of audience</p>
-              </div>
-            </div>
-            <div className="text-sm font-medium">29,882 followers</div>
-          </div>
+      {/* Top Locations */}
+      <Card className="p-4">
+        <Title>Top Locations</Title>
+        <div className="mt-4 h-[250px] w-full">
+          <BarChart
+            data={locationData}
+            index="name"
+            categories={["value"]}
+            colors={["blue"]}
+            valueFormatter={(value) => `${value}%`}
+            yAxisWidth={48}
+          />
         </div>
-      </div>
+        <div className="mt-4 grid grid-cols-2 gap-4">
+          {locationData.map((location) => (
+            <div key={location.name} className="flex items-center gap-2">
+              <div className="w-2 h-2 rounded-full bg-blue-500" />
+              <Text className="text-sm">{location.name}</Text>
+              <Text className="text-sm text-gray-400 ml-auto">{location.followers} followers</Text>
+            </div>
+          ))}
+        </div>
+      </Card>
 
-      {/* Interests */}
-      <div className="bg-[var(--card)] rounded-xl p-6 border border-[var(--border)]">
-        <h3 className="text-lg font-semibold mb-4">Audience Interests</h3>
-        <div className="flex flex-wrap gap-2">
-          <div className="px-3 py-1 bg-[var(--background)] rounded-full text-sm">
-            Technology (68%)
-          </div>
-          <div className="px-3 py-1 bg-[var(--background)] rounded-full text-sm">
-            Business (54%)
-          </div>
-          <div className="px-3 py-1 bg-[var(--background)] rounded-full text-sm">
-            Marketing (47%)
-          </div>
-          <div className="px-3 py-1 bg-[var(--background)] rounded-full text-sm">
-            Entrepreneurship (42%)
-          </div>
-          <div className="px-3 py-1 bg-[var(--background)] rounded-full text-sm">
-            Innovation (38%)
-          </div>
-          <div className="px-3 py-1 bg-[var(--background)] rounded-full text-sm">
-            Leadership (35%)
-          </div>
-          <div className="px-3 py-1 bg-[var(--background)] rounded-full text-sm">
-            Design (32%)
-          </div>
-          <div className="px-3 py-1 bg-[var(--background)] rounded-full text-sm">
-            Finance (28%)
-          </div>
+      {/* Audience Interests */}
+      <Card className="p-4">
+        <Title>Audience Interests</Title>
+        <div className="mt-4 flex flex-wrap gap-2">
+          {interestData.map((interest) => (
+            <div
+              key={interest.name}
+              className="px-3 py-1 rounded-full bg-blue-500/10 border border-blue-500/20"
+            >
+              <Text className="text-sm text-blue-500">
+                {interest.name} ({interest.value}%)
+              </Text>
+            </div>
+          ))}
         </div>
-      </div>
+      </Card>
     </div>
   );
-};
-
-export default DemographicsReport; 
+} 

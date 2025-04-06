@@ -3,9 +3,11 @@
 import { useState, useEffect } from 'react';
 import { Card, Title, Text, AreaChart, BarChart, DonutChart, LineChart, Tooltip, TabGroup, TabList, Tab, TabPanels, TabPanel, Grid } from '@tremor/react';
 import { MagnifyingGlassIcon, ChartBarIcon, UserGroupIcon, FireIcon, CalendarIcon, ClockIcon, TrendingUpIcon, HashtagIcon, CameraIcon, VideoCameraIcon, HeartIcon, ChatBubbleLeftIcon, ShareIcon, BookmarkIcon, ArrowTrendingUpIcon } from '@heroicons/react/24/outline';
+import EngagementReport from '../components/analytics/EngagementReport';
+import DemographicsReport from '../components/analytics/DemographicsReport';
 
 export default function AnalyticsPage() {
-  const [username, setUsername] = useState('');
+  const [selectedChannel, setSelectedChannel] = useState('instagram');
   const [analytics, setAnalytics] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -22,10 +24,104 @@ export default function AnalyticsPage() {
   const [profileImageError, setProfileImageError] = useState(false);
   const [imageLoadErrors, setImageLoadErrors] = useState({});
 
+  const channels = [
+    { id: 'instagram', name: 'Aniruddh', icon: '📸', username: 'pr4n4virl' },
+    { id: 'twitter', name: 'Pranav Narkhede', icon: '🐦', username: 'pr4n4virl' },
+    { id: 'linkedin', name: 'Daniel Hamilton', icon: '💼', username: 'pr4n4virl' }
+  ];
+
+  useEffect(() => {
+    // Load data for default channel on mount
+    fetchAnalytics('instagram');
+  }, []);
+
+  const fetchAnalytics = async (channelId) => {
+    setLoading(true);
+    setError(null);
+    const channel = channels.find(c => c.id === channelId);
+    
+    try {
+      // First try the API with proxy
+      try {
+        const response = await fetch(`/api/analytics/${channel.username}`, {
+          headers: {
+            'Accept': 'application/json'
+          }
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          console.log('API Data:', data);
+          setAnalytics(data);
+          setSelectedChannel(channelId);
+          return;
+        }
+      } catch (proxyError) {
+        console.warn('Proxy API fetch failed:', proxyError);
+      }
+
+      // If proxy fails, try direct API with CORS mode
+      try {
+        const response = await fetch(`https://bluegill-workable-teal.ngrok-free.app/analytics/${channel.username}`, {
+          headers: {
+            'Accept': 'application/json',
+            'ngrok-skip-browser-warning': 'true'
+          },
+          mode: 'cors'
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          console.log('Direct API Data:', data);
+          setAnalytics(data);
+          setSelectedChannel(channelId);
+          return;
+        }
+      } catch (directError) {
+        console.warn('Direct API fetch failed:', directError);
+      }
+
+      // If both API attempts fail, use fallback data
+      console.log('Using fallback data');
+      const fallbackData = {
+        account_summary: {
+          username: channel.username,
+          full_name: channel.name,
+          profile_pic_url: `https://api.dicebear.com/7.x/avatars/svg?seed=${channel.username}`,
+          followers: channel.id === 'instagram' ? 1234 : channel.id === 'twitter' ? 892 : 567,
+          following: channel.id === 'instagram' ? 567 : channel.id === 'twitter' ? 345 : 234,
+          posts_count: channel.id === 'instagram' ? 89 : channel.id === 'twitter' ? 156 : 45,
+          is_verified: true
+        },
+        recent_posts: Array(12).fill(null).map((_, i) => ({
+          id: `post-${i}`,
+          timestamp: new Date(Date.now() - i * 24 * 60 * 60 * 1000).toISOString(),
+          caption: `Sample ${channel.id} post ${i + 1} #social #media #analytics`,
+          likes: Math.floor(Math.random() * (channel.id === 'instagram' ? 1000 : 500)),
+          comments: Math.floor(Math.random() * (channel.id === 'instagram' ? 100 : 50)),
+          engagement_rate: (Math.random() * (channel.id === 'instagram' ? 10 : 5)).toFixed(2),
+          media_type: ['photo', 'video', 'carousel'][Math.floor(Math.random() * 3)],
+          thumbnail_url: `https://picsum.photos/seed/${channel.username}-${i}/400/400`
+        }))
+      };
+
+      setAnalytics(fallbackData);
+      setSelectedChannel(channelId);
+      setError('Using sample data for development - API connection failed');
+
+    } catch (err) {
+      console.error('Analytics Error:', err);
+      setError('Unable to load analytics data. Please try again later.');
+      setAnalytics(null);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const calculateGrowthRate = (posts) => {
     if (!posts || posts.length < 2) return 0;
     
-    // Sort posts by date to ensure correct calculation
+    // Sort posts by date nirto ensure correct calculation
     const sortedPosts = [...posts].sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
     
     // Calculate average engagement for recent and older periods
@@ -44,18 +140,18 @@ export default function AnalyticsPage() {
 
   const handleSearch = async (e) => {
     e.preventDefault();
-    if (!username.trim()) return;
+    if (!selectedChannel.trim()) return;
 
     setLoading(true);
     setError(null);
     setSearchSubmitted(true);
 
     try {
-      const response = await fetch(`http://localhost:8000/analytics/${username}`);
+      const response = await fetch(`https://bluegill-workable-teal.ngrok-free.app/analytics/pr4n4virl`);
       if (!response.ok) {
         throw new Error(
           response.status === 404
-            ? `No data found for username: ${username}`
+            ? `No data found for channel: ${selectedChannel}`
             : 'Failed to fetch analytics'
         );
       }
@@ -320,7 +416,7 @@ export default function AnalyticsPage() {
     
     // Try the cached image first
     if (path && path.startsWith('/images/')) {
-      return `http://localhost:8000${path}`;
+      return `https://bluegill-workable-teal.ngrok-free.app${path}`;
     }
     
     // Fallback to original URL if cached image is not available
@@ -612,510 +708,126 @@ export default function AnalyticsPage() {
               </div>
             </div>
           ))}
-      </div>
-    );
-  };
+    </div>
+  );
+};
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-gray-900 to-gray-800 text-white">
-      <div className="bg-gray-800/50 backdrop-blur-lg border-b border-gray-700">
-        <div className="max-w-7xl mx-auto py-8 px-4 sm:px-6 lg:px-8">
-          <form onSubmit={handleSearch} className="max-w-3xl mx-auto">
-            <div className="relative flex items-center">
-              <input
-                type="text"
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-                placeholder="Enter Instagram username"
-                className="w-full px-4 py-3 pl-12 bg-gray-900/50 border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-white placeholder-gray-400 transition-all duration-200"
-              />
-              <MagnifyingGlassIcon className="absolute left-4 h-5 w-5 text-gray-400" />
-              <button
-                type="submit"
-                disabled={!username.trim() || loading}
-                className="ml-4 px-6 py-3 bg-blue-600 hover:bg-blue-700 rounded-lg font-medium text-white transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-              >
-                {loading ? (
-                  <>
-                    <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                    </svg>
-                    Analyzing...
-                  </>
-                ) : (
-                  <>
-                    <ChartBarIcon className="h-5 w-5" />
-                    Analyze Profile
-                  </>
-                )}
-              </button>
-            </div>
-          </form>
-            </div>
+    <div className="p-6 max-w-7xl mx-auto">
+      <div className="mb-8">
+        <h1 className="text-3xl font-bold mb-4 text-[var(--foreground)]">Analytics Dashboard</h1>
+        
+        {/* Channel Selection */}
+        <div className="flex gap-4 mb-6">
+          {channels.map((channel) => (
+            <button
+              key={channel.id}
+              onClick={() => fetchAnalytics(channel.id)}
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors ${
+                selectedChannel === channel.id
+                  ? 'bg-[var(--primary)] text-white'
+                  : 'bg-[var(--card)] text-[var(--muted)] hover:bg-[var(--primary-hover)]'
+              }`}
+            >
+              <span>{channel.icon}</span>
+              <span>{channel.name}</span>
+              <span className="text-sm opacity-75">@{channel.username}</span>
+            </button>
+          ))}
+        </div>
+
+        {loading && (
+          <div className="flex items-center justify-center p-8">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[var(--primary)]"></div>
           </div>
-          
-      <div className="max-w-7xl mx-auto py-8 px-4 sm:px-6 lg:px-8">
+        )}
+
         {error && (
-          <div className="mb-8 p-4 bg-red-900/50 border border-red-700 rounded-lg">
-            <p className="text-red-200">{error}</p>
-            </div>
-          )}
-          
-        {analytics && !error && (
-          <div className="space-y-8">
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-              <Card className="bg-gray-800/50 border border-gray-700 col-span-1 md:col-span-2">
-                <div className="flex items-center gap-6">
-                  {renderProfileImage()}
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
-                      <Text className="text-2xl font-bold text-white truncate">
-                        {analytics.account_summary.username}
-                      </Text>
-                      {analytics.account_summary.is_private && (
-                        <div className="bg-gray-700/50 rounded-full p-1">
-                          <svg className="w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-                          </svg>
-                        </div>
-                      )}
-                    </div>
-                    <Text className="text-gray-400 text-lg truncate">
-                      {analytics.account_summary.full_name}
-                    </Text>
-                    <Text className="text-gray-400 mt-2 line-clamp-2 break-words">
-                      {analytics.account_summary.bio || 'No bio available'}
-                    </Text>
-                    <div className="flex items-center gap-4 mt-3">
-                      <a
-                        href={`https://instagram.com/${analytics.account_summary.username}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-flex items-center gap-2 px-3 py-1 bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 rounded-full text-sm transition-colors duration-200"
-                      >
-                        <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
-                          <path d="M12 2C6.477 2 2 6.477 2 12c0 4.991 3.657 9.128 8.438 9.878v-6.987h-2.54V12h2.54V9.797c0-2.506 1.492-3.89 3.777-3.89 1.094 0 2.238.195 2.238.195v2.46h-1.26c-1.243 0-1.63.771-1.63 1.562V12h2.773l-.443 2.89h-2.33v6.988C18.343 21.128 22 16.991 22 12c0-5.523-4.477-10-10-10z"/>
-                        </svg>
-                        View Profile
-                      </a>
-                      <div className="flex items-center gap-2 text-gray-400 text-sm">
-                        <ClockIcon className="w-4 h-4" />
-                        <span>Joined {new Date(analytics.account_summary.created_at).getFullYear()}</span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </Card>
-              
-              <Card className="bg-gray-800/50 border border-gray-700 transform hover:scale-105 transition-all duration-200">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <Text className="text-gray-400">Followers</Text>
-                    <Text className="text-3xl font-bold text-white">
-                      {analytics.account_summary.followers.toLocaleString()}
-                    </Text>
-                    <Text className="text-green-400 text-sm">
-                      +{((analytics.account_summary.followers * 0.05).toFixed(0)).toLocaleString()} this week
-                    </Text>
-                  </div>
-                  <div className="h-16 w-16 rounded-full bg-blue-500/20 flex items-center justify-center">
-                    <UserGroupIcon className="h-8 w-8 text-blue-500" />
-                  </div>
-                </div>
-              </Card>
+          <div className="bg-red-500/10 border border-red-500/20 text-red-500 rounded-lg p-4 mb-6">
+            {error}
+          </div>
+        )}
 
-              <Card className="bg-gray-800/50 border border-gray-700 transform hover:scale-105 transition-all duration-200">
-                <div className="flex items-center justify-between">
-            <div>
-                    <Text className="text-gray-400">Engagement Rate</Text>
-                    <Text className="text-3xl font-bold text-white">
-                      {analytics.engagement_stats.average_engagement_rate.toFixed(1)}%
-                    </Text>
-                    <Text className={calculateGrowthRate(analytics.recent_posts) > 0 ? "text-green-400 text-sm" : "text-red-400 text-sm"}>
-                      {calculateGrowthRate(analytics.recent_posts)}% vs last period
-                    </Text>
-                  </div>
-                  <div className="h-16 w-16 rounded-full bg-orange-500/20 flex items-center justify-center">
-                    <FireIcon className="h-8 w-8 text-orange-500" />
+        {analytics && !loading && (
+          <div className="space-y-6">
+            {/* Account Summary Card */}
+            <Card className="p-4">
+              <div className="flex items-center gap-4">
+                <div className="relative w-16 h-16 rounded-full overflow-hidden">
+                  <img 
+                    src={analytics.account_summary.profile_pic_url} 
+                    alt={analytics.account_summary.username}
+                    className="w-full h-full object-cover"
+                    onError={(e) => {
+                      e.target.onerror = null;
+                      e.target.src = 'https://via.placeholder.com/150';
+                    }}
+                  />
+                </div>
+                <div>
+                  <Title>{analytics.account_summary.full_name || analytics.account_summary.username}</Title>
+                  <Text>@{analytics.account_summary.username}</Text>
+                  <div className="flex gap-4 mt-2">
+                    <Text><strong>{analytics.account_summary.followers}</strong> followers</Text>
+                    <Text><strong>{analytics.account_summary.following}</strong> following</Text>
+                    <Text><strong>{analytics.account_summary.posts_count}</strong> posts</Text>
                   </div>
                 </div>
-              </Card>
-            </div>
-
-            <TabGroup className="mt-8" onIndexChange={setSelectedTab}>
-              <TabList className="bg-gray-800/50 p-1 rounded-lg">
-                <Tab className="py-2.5 px-4 text-sm font-medium rounded-md transition-all duration-200">Overview</Tab>
-                <Tab className="py-2.5 px-4 text-sm font-medium rounded-md transition-all duration-200">Engagement</Tab>
-                <Tab className="py-2.5 px-4 text-sm font-medium rounded-md transition-all duration-200">Content</Tab>
-                <Tab className="py-2.5 px-4 text-sm font-medium rounded-md transition-all duration-200">Hashtags</Tab>
+              </div>
+            </Card>
+            
+            <TabGroup>
+              <TabList className="flex space-x-1 rounded-xl bg-[var(--card)] p-1">
+                <Tab className="w-full rounded-lg py-2.5 text-sm font-medium leading-5 ring-white ring-opacity-60 ring-offset-2 ring-offset-blue-400 focus:outline-none focus:ring-2 text-[var(--muted)] hover:bg-white/[0.12] hover:text-white ui-selected:bg-[var(--primary)] ui-selected:text-white ui-selected:shadow">
+                  Overview
+                </Tab>
+                <Tab className="w-full rounded-lg py-2.5 text-sm font-medium leading-5 ring-white ring-opacity-60 ring-offset-2 ring-offset-blue-400 focus:outline-none focus:ring-2 text-[var(--muted)] hover:bg-white/[0.12] hover:text-white ui-selected:bg-[var(--primary)] ui-selected:text-white ui-selected:shadow">
+                  Demographics
+                </Tab>
+                <Tab className="w-full rounded-lg py-2.5 text-sm font-medium leading-5 ring-white ring-opacity-60 ring-offset-2 ring-offset-blue-400 focus:outline-none focus:ring-2 text-[var(--muted)] hover:bg-white/[0.12] hover:text-white ui-selected:bg-[var(--primary)] ui-selected:text-white ui-selected:shadow">
+                  Content
+                </Tab>
               </TabList>
-
-              <TabPanels>
+              <TabPanels className="mt-6">
                 <TabPanel>
-                  <div className="space-y-6 mt-6">
-                    <div className="flex items-center justify-between">
-                      <div className="flex gap-2">
-                        {['7d', '30d', '90d', '1y'].map((range) => (
-                          <button
-                            key={`time-range-${range}`}
-                            onClick={() => setSelectedTimeRange(range)}
-                            className={`px-4 py-2 rounded-lg transition-all duration-200 flex items-center gap-2 ${
-                              selectedTimeRange === range
-                                ? 'bg-blue-600 text-white scale-105 shadow-lg shadow-blue-500/25'
-                                : 'bg-gray-800/50 text-gray-400 hover:bg-gray-700/50 hover:scale-102'
-                            }`}
-                          >
-                            <CalendarIcon className="h-4 w-4" />
-                            {range}
-                          </button>
-                        ))}
-                      </div>
-                      {renderColorSchemeSelector()}
-                    </div>
-
-                    <Card className="bg-gray-800/50 border border-gray-700">
-                      <div className="flex items-center justify-between mb-6">
-                        <div>
-                          <Title className="text-white">Engagement Trends</Title>
-                          <Text className="text-gray-400">Performance over time</Text>
-                        </div>
-                        <div className="flex items-center gap-4">
-                          <div className="flex items-center gap-2">
-                            <div className="w-3 h-3 rounded-full bg-blue-500"></div>
-                            <Text className="text-gray-400">Likes</Text>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <div className="w-3 h-3 rounded-full bg-green-500"></div>
-                            <Text className="text-gray-400">Comments</Text>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <div className="w-3 h-3 rounded-full bg-orange-500"></div>
-                            <Text className="text-gray-400">Engagement</Text>
-                          </div>
-                        </div>
-                      </div>
-                      <AreaChart
-                        data={analytics.recent_posts.map(post => ({
-                          ...post,
-                          formattedDate: formatDate(post.timestamp),
-                          engagement: post.engagement_rate
-                        }))}
-                        index="formattedDate"
-                        categories={["likes", "comments", "engagement"]}
-                        colors={currentColors}
-                        valueFormatter={(value) => value.toLocaleString()}
-                        yAxisWidth={60}
-                        showLegend={false}
-                        className="h-72"
-                        curveType="natural"
-                        customTooltip={({ payload }) => {
-                          if (!payload?.[0]?.payload) return null;
-                          const data = payload[0].payload;
-                          return (
-                            <div className="bg-gray-900 p-4 rounded-lg shadow-lg border border-gray-700">
-                              <div className="text-sm text-gray-400">{data.formattedDate}</div>
-                              <div className="grid grid-cols-2 gap-4 mt-2">
-                                <div>
-                                  <div className="text-blue-500">Likes</div>
-                                  <div className="text-white font-bold">{data.likes.toLocaleString()}</div>
-                                </div>
-                                <div>
-                                  <div className="text-green-500">Comments</div>
-                                  <div className="text-white font-bold">{data.comments.toLocaleString()}</div>
-                                </div>
-                                <div>
-                                  <div className="text-orange-500">Engagement</div>
-                                  <div className="text-white font-bold">{data.engagement.toFixed(1)}%</div>
-                                </div>
-                              </div>
-                            </div>
-                          );
-                        }}
-                      />
-                    </Card>
-
-                    <Card className="bg-gray-800/50 border border-gray-700">
-                      {renderCalendar()}
-                    </Card>
-
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                      <Card className="bg-gray-800/50 border border-gray-700">
-                        <div className="flex items-center justify-between mb-4">
-                          <div>
-                            <Title className="text-white">Content Distribution</Title>
-                            <Text className="text-gray-400">By post type</Text>
-                          </div>
-                        </div>
-                        <DonutChart
-                          data={calculateContentTypes(analytics.recent_posts)}
-                          category="value"
-                          index="name"
-                          colors={["blue", "cyan", "indigo"]}
-                          className="h-48"
-                          customTooltip={({ payload }) => {
-                            if (!payload?.[0]?.payload) return null;
-                            const data = payload[0].payload;
-                            return (
-                              <div className="bg-gray-900 p-3 rounded-lg shadow-lg border border-gray-700">
-                                <div className="text-white font-medium">{data.name}</div>
-                                <div className="text-sm text-gray-400">
-                                  {data.value} posts ({data.percentage}%)
-                                </div>
-                              </div>
-                            );
-                          }}
-                        />
-                      </Card>
-
-                      <Card className="bg-gray-800/50 border border-gray-700">
-                        <div className="flex items-center justify-between mb-4">
-                          <div>
-                            <Title className="text-white">Best Posting Times</Title>
-                            <Text className="text-gray-400">By engagement rate</Text>
-                          </div>
-                        </div>
-                        <BarChart
-                          data={calculateBestTimes(analytics.recent_posts).timeSlots}
-                          index="time"
-                          categories={["engagement"]}
-                          colors={currentColors}
-                          className="h-48"
-                          customTooltip={({ payload }) => {
-                            if (!payload?.[0]?.payload) return null;
-                            const data = payload[0].payload;
-                            return (
-                              <div className="bg-gray-900 p-3 rounded-lg shadow-lg border border-gray-700">
-                                <div className="text-white font-medium">{data.time}</div>
-                                <div className="grid grid-cols-2 gap-3 mt-2 text-sm">
-                                  <div>
-                                    <div className="text-gray-400">Avg. Engagement</div>
-                                    <div className="text-white font-medium">{data.engagement}%</div>
-                                  </div>
-                                  <div>
-                                    <div className="text-gray-400">Posts</div>
-                                    <div className="text-white font-medium">{data.posts}</div>
-                                  </div>
-                                  <div>
-                                    <div className="text-gray-400">Avg. Likes</div>
-                                    <div className="text-white font-medium">{data.avgLikes}</div>
-                                  </div>
-                                  <div>
-                                    <div className="text-gray-400">Avg. Comments</div>
-                                    <div className="text-white font-medium">{data.avgComments}</div>
-                                  </div>
-                                </div>
-                              </div>
-                            );
-                          }}
-                        />
-                      </Card>
-                    </div>
-                  </div>
+                  <EngagementReport platform={selectedChannel} />
                 </TabPanel>
-
                 <TabPanel>
-                  <div className="space-y-6 mt-6">
-                    <Card className="bg-gray-800/50 border border-gray-700">
-                      <Title className="text-white mb-4">Engagement Breakdown</Title>
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                        <div className="space-y-4">
-                          <Text className="text-gray-400">Average Likes</Text>
-                          <div className="flex items-end gap-2">
-                            <Text className="text-3xl font-bold text-white">
-                              {Math.round(analytics.engagement_stats.average_likes).toLocaleString()}
-                            </Text>
-                            <Text className="text-green-400 text-sm mb-1">+5.2%</Text>
-                          </div>
-                          <div className="h-2 bg-gray-700 rounded-full">
-                            <div className="h-full bg-blue-500 rounded-full" style={{ width: '75%' }}></div>
-                          </div>
-                        </div>
-                        
-                        <div className="space-y-4">
-                          <Text className="text-gray-400">Average Comments</Text>
-                          <div className="flex items-end gap-2">
-                            <Text className="text-3xl font-bold text-white">
-                              {Math.round(analytics.engagement_stats.average_comments).toLocaleString()}
-                            </Text>
-                            <Text className="text-green-400 text-sm mb-1">+3.8%</Text>
-                          </div>
-                          <div className="h-2 bg-gray-700 rounded-full">
-                            <div className="h-full bg-green-500 rounded-full" style={{ width: '60%' }}></div>
-                          </div>
-                        </div>
-
-                        <div className="space-y-4">
-                          <Text className="text-gray-400">Engagement Rate</Text>
-                          <div className="flex items-end gap-2">
-                            <Text className="text-3xl font-bold text-white">
-                              {analytics.engagement_stats.average_engagement_rate.toFixed(1)}%
-                            </Text>
-                            <Text className="text-red-400 text-sm mb-1">-1.2%</Text>
-                          </div>
-                          <div className="h-2 bg-gray-700 rounded-full">
-                            <div className="h-full bg-orange-500 rounded-full" style={{ width: '85%' }}></div>
-                          </div>
-                        </div>
-                      </div>
-                    </Card>
-
-                    <Card className="bg-gray-800/50 border border-gray-700">
-                      <Title className="text-white mb-6">Top Performing Posts</Title>
-                      {renderRecentPosts()}
-                    </Card>
-                  </div>
+                  <DemographicsReport platform={selectedChannel} />
                 </TabPanel>
-
                 <TabPanel>
-                  <div className="space-y-6 mt-6">
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                      {['photo', 'video', 'carousel'].map(type => {
-                        const typeData = calculateContentTypes(analytics.recent_posts)
-                          .find(t => t.name.toLowerCase() === type);
-                        return (
-                          <Card key={`content-type-${type}`} className="bg-gray-800/50 border border-gray-700">
-                            <div className="flex items-center justify-between">
-                              <div>
-                                <Text className="text-gray-400">{type.charAt(0).toUpperCase() + type.slice(1)}s</Text>
-                                <Text className="text-2xl font-bold text-white">{typeData?.value || 0}</Text>
-                                <Text className="text-gray-400 text-sm">{typeData?.percentage || 0}% of content</Text>
-                              </div>
-                              <div className="h-12 w-12 rounded-full bg-blue-500/20 flex items-center justify-center">
-                                {type === 'photo' && <CameraIcon className="h-6 w-6 text-blue-500" />}
-                                {type === 'video' && <VideoCameraIcon className="h-6 w-6 text-blue-500" />}
-                                {type === 'carousel' && <ChartBarIcon className="h-6 w-6 text-blue-500" />}
-                              </div>
-                            </div>
-                          </Card>
-                        );
-                      })}
-                    </div>
-
-                    <Card className="bg-gray-800/50 border border-gray-700">
-                      <Title className="text-white mb-6">Content Calendar</Title>
-                      <div className="grid grid-cols-7 gap-2">
-                        {Array.from({ length: 35 }).map((_, index) => {
-                          const date = new Date();
-                          date.setDate(date.getDate() - (34 - index));
-                          const posts = analytics.recent_posts.filter(post => 
-                            new Date(post.timestamp).toDateString() === date.toDateString()
-                          );
-                          return (
-                            <div
-                              key={`calendar-${date.toDateString()}-${index}`}
-                              className={`aspect-square rounded-lg p-2 flex flex-col items-center justify-center ${
-                                posts.length > 0 ? 'bg-blue-500/20 border border-blue-500/50' : 'bg-gray-900/50'
-                              }`}
-                            >
-                              <Text className="text-gray-400 text-xs">{date.getDate()}</Text>
-                              {posts.length > 0 && (
-                                <Text className="text-white text-sm font-medium">{posts.length}</Text>
-                              )}
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </Card>
-                  </div>
-                </TabPanel>
-
-                <TabPanel>
-                  <div className="space-y-6 mt-6">
-                    <Card className="bg-gray-800/50 border border-gray-700">
-                      <Title className="text-white mb-6">Top Hashtags</Title>
-                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                        {calculateTopHashtags(analytics.recent_posts).map(({ tag, count }) => (
-                          <div
-                            key={`hashtag-${tag}`}
-                            className="flex items-center justify-between p-4 bg-gray-900/50 rounded-lg"
-                          >
-                            <div className="flex items-center gap-3">
-                              <div className="h-10 w-10 rounded-full bg-blue-500/20 flex items-center justify-center">
-                                <HashtagIcon className="h-5 w-5 text-blue-500" />
-                              </div>
-                              <div>
-                                <Text className="text-white font-medium">{tag}</Text>
-                                <Text className="text-gray-400 text-sm">{count} posts</Text>
-                              </div>
-                            </div>
-                            <div className="h-2 w-24 bg-gray-700 rounded-full">
-                              <div
-                                className="h-full bg-blue-500 rounded-full"
-                                style={{
-                                  width: `${(count / analytics.recent_posts.length * 100)}%`
-                                }}
-                              ></div>
-                            </div>
-                          </div>
-                        ))}
+                  <div className="space-y-6">
+                    {/* Content Calendar */}
+                    {renderCalendar()}
+                    
+                    {/* Content Types */}
+                    <Card>
+                      <Title>Content Performance</Title>
+                      <div className="mt-4">
+                        {analytics && analytics.recent_posts && (
+                          <BarChart
+                            data={calculateContentTypes(analytics.recent_posts)}
+                            index="name"
+                            categories={["value"]}
+                            colors={colorSchemes[chartColorScheme]}
+                            valueFormatter={(value) => `${value} posts`}
+                            yAxisWidth={48}
+                          />
+                        )}
                       </div>
                     </Card>
                   </div>
                 </TabPanel>
               </TabPanels>
             </TabGroup>
+          </div>
+        )}
 
-            {showPostDetails && selectedPost && (
-              <div className="fixed inset-0 bg-black/75 flex items-center justify-center z-50">
-                <div className="bg-gray-900 rounded-lg max-w-2xl w-full m-4 overflow-hidden">
-                  <div className="p-4 border-b border-gray-800">
-                    <div className="flex items-center justify-between">
-                      <Title className="text-white">Post Details</Title>
-                      <button
-                        onClick={() => setShowPostDetails(false)}
-                        className="text-gray-400 hover:text-white"
-                      >
-                        <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                        </svg>
-                      </button>
-                    </div>
-                  </div>
-                  <div className="p-4">
-                    <div className="aspect-square rounded-lg overflow-hidden mb-4">
-                      <img
-                        src={selectedPost.thumbnail_url}
-                        alt="Post"
-                        className="w-full h-full object-cover"
-                      />
-                    </div>
-                    <Text className="text-white">{selectedPost.caption || 'No caption'}</Text>
-                    <div className="grid grid-cols-3 gap-4 mt-4">
-                      <div className="p-4 bg-gray-800/50 rounded-lg text-center">
-                        <Text className="text-gray-400">Likes</Text>
-                        <Text className="text-2xl font-bold text-white">{selectedPost.likes.toLocaleString()}</Text>
-                      </div>
-                      <div className="p-4 bg-gray-800/50 rounded-lg text-center">
-                        <Text className="text-gray-400">Comments</Text>
-                        <Text className="text-2xl font-bold text-white">{selectedPost.comments.toLocaleString()}</Text>
-                      </div>
-                      <div className="p-4 bg-gray-800/50 rounded-lg text-center">
-                        <Text className="text-gray-400">Engagement</Text>
-                        <Text className="text-2xl font-bold text-white">{selectedPost.engagement_rate.toFixed(1)}%</Text>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {renderPostPreview()}
-            </div>
-          )}
-          
-        {!analytics && !error && searchSubmitted && (
+        {!analytics && !loading && !error && (
           <div className="text-center py-12">
-            <Title className="text-white">No Analytics Data</Title>
-            <Text className="text-gray-400">Try searching for a different Instagram username</Text>
-            </div>
-          )}
-
-        {!searchSubmitted && !error && (
-          <div className="text-center py-12">
-            <Title className="text-white">Instagram Analytics</Title>
-            <Text className="text-gray-400">Enter an Instagram username above to view their analytics</Text>
-        </div>
+            <Title className="text-[var(--foreground)]">Select a Channel</Title>
+            <Text className="text-[var(--muted)]">Choose a social media channel above to view analytics</Text>
+          </div>
         )}
       </div>
     </div>

@@ -5,7 +5,30 @@ import Image from 'next/image';
 import MediaDesigner from './MediaDesigner';
 import Link from 'next/link';
 import { postToInstagram } from '@/lib/instagram';
-import { generateSocialMediaPost, generateContentIdeas, generateText } from '@/lib/ai';
+import { generateSocialMediaPost, generateContentIdeas, generateText, generateImage, analyzeImage } from '@/lib/ai';
+import { 
+  ImageIcon, 
+  XIcon, 
+  Wand2Icon, 
+  LoaderIcon, 
+  ImagePlusIcon, 
+  RefreshIcon, 
+  UserIcon, 
+  CalendarIcon, 
+  ClockIcon, 
+  ChartIcon, 
+  GridIcon, 
+  EditIcon, 
+  PlusIcon, 
+  TrendingUpIcon,
+  MessageSquareIcon,
+  ShareIcon,
+  SendIcon,
+  SaveIcon,
+  MinimizeIcon,
+  FileTextIcon
+} from 'lucide-react';
+import { Card, Title, Text, Button } from '@tremor/react';
 
 const PostCreator = ({ initialPost, onSave, onCancel }) => {
   const [postContent, setPostContent] = useState(initialPost?.description || "Success comes from mastering your time. Reflect daily on your accomplishments and balance work with rest for maximum productivity! ⏰✨");
@@ -46,9 +69,34 @@ const PostCreator = ({ initialPost, onSave, onCancel }) => {
   ]);
   const [newMessage, setNewMessage] = useState('');
   const chatEndRef = useRef(null);
-  const fileInputRef = useRef(null);
   const [isGeneratingText, setIsGeneratingText] = useState(false);
   const [chatError, setChatError] = useState(null);
+
+  const [postForm, setPostForm] = useState({
+    profile: null,
+    time: '12:00',
+    title: '',
+    description: '',
+    hashtags: [],
+    image: null
+  });
+  
+  const [loading, setLoading] = useState({
+    image: false,
+    content: false,
+    analyzing: false
+  });
+  
+  const [imagePrompt, setImagePrompt] = useState('');
+  const [contentPrompt, setContentPrompt] = useState('');
+  const [generatedImages, setGeneratedImages] = useState([]);
+  const [showMediaModal, setShowMediaModal] = useState(false);
+  
+  const profiles = [
+    { id: 'instagram', name: 'Aniruddh', platform: 'instagram', color: '#E1306C', username: 'pr4n4virl' },
+    { id: 'twitter', name: 'Pranav Narkhede', platform: 'twitter', color: '#1DA1F2', username: 'pr4n4virl' },
+    { id: 'linkedin', name: 'Daniel Hamilton', platform: 'linkedin', color: '#0077B5', username: 'pr4n4virl' }
+  ];
 
   useEffect(() => {
     if (chatEndRef.current) {
@@ -144,7 +192,7 @@ const PostCreator = ({ initialPost, onSave, onCancel }) => {
             responseMessage = generatedContent;
         }
         
-        const aiResponse = {
+      const aiResponse = {
           id: Date.now(),
           role: 'assistant',
           content: responseMessage
@@ -250,232 +298,254 @@ const PostCreator = ({ initialPost, onSave, onCancel }) => {
     onSave(postData);
   };
 
+  // Generate content based on prompt
+  const handleGenerateContent = async () => {
+    if (!contentPrompt.trim()) return;
+    
+    setLoading(true);
+    try {
+      // Generate content first
+      const contentResponse = await fetch('/api/generate/content', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          prompt: contentPrompt,
+          platform: postForm.profile?.platform || 'linkedin',
+          tone: 'professional'
+        })
+      });
+
+      if (!contentResponse.ok) {
+        throw new Error('Failed to generate content');
+      }
+
+      const contentData = await contentResponse.json();
+      
+      // Update form with generated content
+      setPostForm(prev => ({
+        ...prev,
+        title: contentData.title || '',
+        description: contentData.description || '',
+        hashtags: contentData.hashtags || []
+      }));
+
+      // Generate images based on the content
+      const imageResponse = await fetch('/api/generate/image', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          prompt: contentPrompt,
+          platform: postForm.profile?.platform || 'linkedin'
+        })
+      });
+
+      if (!imageResponse.ok) {
+        throw new Error('Failed to generate images');
+      }
+
+      const imageData = await imageResponse.json();
+      
+      // Update images
+      if (imageData.images) {
+        setGeneratedImages(Array.isArray(imageData.images) ? imageData.images : [imageData.images]);
+        setPostMedia(Array.isArray(imageData.images) ? imageData.images[0] : imageData.images);
+      }
+
+    } catch (error) {
+      console.error('Error generating content:', error);
+      // You might want to show an error message to the user here
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Generate image based on prompt
+  const handleGenerateImage = async () => {
+    try {
+      setLoading(prev => ({ ...prev, image: true }));
+      const images = await generateImage(imagePrompt, selectedProfile.platform);
+      setGeneratedImages(images);
+      setPostMedia(images[0]);
+      setShowMediaModal(true);
+    } catch (error) {
+      console.error('Error generating image:', error);
+    } finally {
+      setLoading(prev => ({ ...prev, image: false }));
+    }
+  };
+
+  // Analyze uploaded image and generate content
+  const handleImageAnalysis = async (imageUrl) => {
+    try {
+      setLoading(prev => ({ ...prev, analyzing: true }));
+      const analysis = await analyzeImage(imageUrl, selectedProfile.platform);
+      
+      setPostForm(prev => ({
+        ...prev,
+        title: analysis.title,
+        description: analysis.description,
+        hashtags: analysis.hashtags
+      }));
+    } catch (error) {
+      console.error('Error analyzing image:', error);
+    } finally {
+      setLoading(prev => ({ ...prev, analyzing: false }));
+    }
+  };
+
+  // Auto-generate initial content when profile changes
+  useEffect(() => {
+    if (postForm.profile) {
+      handleGenerateContent();
+    }
+  }, [postForm.profile]);
+
   return (
-    <div className="flex-1 p-4">
-      {showMediaDesigner ? (
-        <div className="absolute inset-0 z-50 bg-[var(--background)] flex">
-          <MediaDesigner 
-            onClose={handleMediaDesignerClose}
-            onMediaGenerated={handleMediaGenerated}
-          />
-        </div>
-      ) : (
-        <div className="grid grid-cols-2 gap-4 h-full">
-          {/* Post Editor */}
-          <div className="bg-[var(--card)] rounded-xl border border-[var(--border)] p-6 flex flex-col h-full">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-xl font-semibold">
-                {initialPost ? 'Edit Post' : 'Create Post'}
-              </h2>
-              {onCancel && (
-                <button 
-                  onClick={onCancel}
-                  className="text-[var(--muted)] hover:text-[var(--foreground)] transition-colors"
-                >
-                  <XIcon className="w-6 h-6" />
-                </button>
-              )}
-            </div>
-            
-            <div className="flex items-center gap-3 mb-6">
-              <ProfileAvatar profile={selectedProfile} />
-            </div>
-            
-            <textarea
-              className="flex-1 bg-transparent border-none outline-none resize-none mb-4 min-h-40 text-[16px] leading-relaxed"
-              value={postContent}
-              onChange={handlePostChange}
-              placeholder="What do you want to share?"
-            />
-
-            {postMedia && (
-              <div className="relative mb-4 rounded-lg overflow-hidden">
-                <Image
-                  src={postMedia.url}
-                  alt="Post media"
-                  width={400}
-                  height={300}
-                  className="w-full object-cover rounded-lg"
-                />
-                <button
-                  onClick={() => setPostMedia(null)}
-                  className="absolute top-2 right-2 p-1 rounded-full bg-black/50 hover:bg-black/70 text-white transition-colors"
-                >
-                  <XIcon className="w-4 h-4" />
-                </button>
-              </div>
-            )}
-
-            <input
-              type="file"
-              ref={fileInputRef}
-              className="hidden"
-              accept="image/*"
-              onChange={handleMediaUpload}
-            />
-
-            {/* Status message */}
-            {postStatus && (
-              <div className={`p-2 rounded-lg mb-2 text-sm ${
-                postStatus.type === 'success' ? 'bg-green-100 text-green-800 dark:bg-green-800/20 dark:text-green-400' : 
-                postStatus.type === 'error' ? 'bg-red-100 text-red-800 dark:bg-red-800/20 dark:text-red-400' : 
-                'bg-blue-100 text-blue-800 dark:bg-blue-800/20 dark:text-blue-400'
-              }`}>
-                {postStatus.message}
-              </div>
-            )}
-
-            <div className="border-t border-[var(--border)] pt-4 flex flex-wrap gap-2 justify-between">
-              <div className="flex gap-2">
-                <button 
-                  onClick={handleInsertMedia}
-                  className="inline-flex items-center gap-2 px-3 py-2 bg-[var(--background)] hover:bg-[rgba(255,255,255,0.05)] rounded-lg transition-colors text-sm"
-                >
-                  <DocumentIcon className="w-5 h-5" />
-                  <span>Insert Media</span>
-                </button>
-                
-                <button 
-                  onClick={handleDesignMedia}
-                  className="inline-flex items-center gap-2 px-3 py-2 bg-[var(--secondary)] hover:bg-[var(--secondary-hover)] rounded-lg transition-colors text-sm text-white"
-                >
-                  <WandIcon className="w-5 h-5" />
-                  <span>Design Media</span>
-                </button>
-              </div>
-              
-              {/* Instagram Post Now button, only show for Instagram profiles */}
-              {selectedProfile.platform === 'instagram' && (
-                <button 
-                  onClick={handlePostNow}
-                  disabled={isPosting || !postMedia}
-                  className={`inline-flex items-center gap-2 px-3 py-2 rounded-lg transition-colors text-sm text-white ${
-                    isPosting 
-                      ? 'bg-[#E4405F]/50 cursor-not-allowed' 
-                      : 'bg-[#E4405F] hover:bg-[#d13752]'
-                  }`}
-                >
-                  {isPosting ? (
-                    <>
-                      <LoadingIcon className="w-5 h-5 animate-spin" />
-                      <span>Posting...</span>
-                    </>
-                  ) : (
-                    <>
-                      <InstagramIcon className="w-5 h-5" />
-                      <span>Post Now to Instagram</span>
-                    </>
-                  )}
-                </button>
-              )}
-            </div>
-
-            {/* Add Save button */}
-            <div className="flex justify-end mt-4">
+    <div className="space-y-6">
+      <Card className="p-4">
+        <Title>Create New Post</Title>
+        
+        {/* Channel Selection */}
+        <div className="mt-4">
+          <Text className="mb-2">Select Channel</Text>
+          <div className="flex gap-2">
+            {profiles.map((profile) => (
               <button
-                onClick={handleSave}
-                className="inline-flex items-center gap-2 px-4 py-2 bg-[var(--primary)] hover:bg-[var(--primary-hover)] rounded-lg transition-colors text-sm text-white"
+                key={profile.id}
+                onClick={() => setPostForm(prev => ({ ...prev, profile }))}
+                className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors ${
+                  postForm.profile?.id === profile.id
+                    ? 'bg-blue-500 text-white'
+                    : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
+                }`}
               >
-                <SaveIcon className="w-5 h-5" />
-                <span>Save Post</span>
+                <div 
+                  className="w-5 h-5 rounded-full" 
+                  style={{ backgroundColor: profile.color }}
+                />
+                <span>{profile.name}</span>
               </button>
-            </div>
+            ))}
+          </div>
           </div>
           
-          {/* Preview and AI Assistant */}
-          <div className="bg-[var(--card)] rounded-xl border border-[var(--border)] flex flex-col h-full">
-            <div className="px-6 py-4 border-b border-[var(--border)]">
-              <h2 className="text-xl font-semibold">Preview</h2>
-            </div>
-            
-            <div className="flex-1 p-6 overflow-y-auto">
-              {/* Post Preview */}
-              <div className="mb-8">
-                <div className="flex items-center gap-3 mb-4">
-                  <ProfileAvatar profile={selectedProfile} />
-                </div>
-                
-                <p className="text-[var(--foreground)] mb-4 whitespace-pre-wrap">{postContent}</p>
-                
-                <div className="flex items-center gap-4 text-[var(--muted)]">
-                  <div className="flex items-center gap-1">
-                    <CommentIcon className="w-5 h-5" />
-                    <span>28</span>
-                  </div>
-                  <div className="flex items-center gap-1">
-                    <ShareIcon className="w-5 h-5" />
-                    <span>5</span>
-                  </div>
-                </div>
-              </div>
-              
-              {/* AI Assistant Interface */}
-              <div className={`bg-[var(--card)] rounded-xl border border-[var(--border)] p-6 flex flex-col h-full ${showAIChat ? '' : 'hidden'}`}>
-                <div className="flex items-center justify-between mb-4">
-                  <h2 className="text-xl font-semibold">AI Assistant</h2>
-                  <div className="flex gap-2">
-                    <button
-                      onClick={() => setShowAIChat(false)}
-                      className="p-2 hover:bg-[rgba(255,255,255,0.05)] rounded-lg text-[var(--muted)]"
-                    >
-                      <MinimizeIcon className="w-5 h-5" />
-                    </button>
-                  </div>
-                </div>
-                
-                <div className="flex-1 overflow-auto mb-4 space-y-4">
-                  {messages.map((message) => (
-                    <div 
-                      key={message.id}
-                      className={`flex ${message.role === 'assistant' ? 'justify-start' : 'justify-end'}`}
-                    >
-                      <div 
-                        className={`max-w-[80%] px-4 py-3 rounded-xl ${
-                          message.role === 'assistant' 
-                            ? 'bg-[var(--background)] text-[var(--foreground)]' 
-                            : 'bg-[var(--primary)] text-white'
-                        } ${message.isTyping ? 'animate-pulse' : ''}`}
-                      >
-                        {message.content}
-                      </div>
-                    </div>
-                  ))}
-                  {chatError && (
-                    <div className="flex justify-center">
-                      <div className="px-4 py-2 bg-red-100 text-red-800 rounded-lg text-sm">
-                        {chatError}
-                      </div>
-                    </div>
-                  )}
-                  <div ref={chatEndRef} />
-                </div>
-                
-                <form onSubmit={handleSendMessage} className="flex gap-2">
-                  <input
-                    type="text"
-                    value={newMessage}
-                    onChange={(e) => setNewMessage(e.target.value)}
-                    placeholder="Ask AI to write a post for you..."
-                    className="flex-1 px-4 py-2 bg-[var(--background)] border border-[var(--border)] rounded-md focus:outline-none focus:ring-2 focus:ring-[var(--primary)] transition-all text-sm"
-                    disabled={isGeneratingText}
-                  />
-                  <button
-                    type="submit"
-                    className="p-2 bg-[var(--primary)] text-white rounded-md hover:bg-[var(--primary-hover)] transition-colors disabled:opacity-50"
-                    disabled={!newMessage.trim() || isGeneratingText}
-                  >
-                    {isGeneratingText ? (
-                      <LoadingIcon className="w-5 h-5 animate-spin" />
-                    ) : (
-                      <SendIcon className="w-5 h-5" />
-                    )}
-                  </button>
-                </form>
-              </div>
-            </div>
+        {/* Time Selection */}
+        <div className="mt-4">
+          <Text className="mb-2">Schedule Time</Text>
+          <input
+            type="time"
+            value={postForm.time}
+            onChange={(e) => setPostForm(prev => ({ ...prev, time: e.target.value }))}
+            className="bg-gray-800 text-white px-4 py-2 rounded-lg"
+          />
+          </div>
+
+        {/* AI Content Generator */}
+        <div className="mt-4">
+          <Text className="mb-2">AI Content Assistant</Text>
+          <div className="flex gap-2">
+            <input
+              type="text"
+              value={contentPrompt}
+              onChange={(e) => setContentPrompt(e.target.value)}
+              placeholder="What would you like to post about?"
+              className="flex-1 bg-gray-800 text-white px-4 py-2 rounded-lg"
+            />
+            <Button
+              onClick={handleGenerateContent}
+              loading={loading}
+              disabled={!contentPrompt.trim() || loading}
+              className="bg-blue-500 text-white px-6"
+            >
+              {loading ? 'Generating...' : 'Generate'}
+            </Button>
           </div>
         </div>
-      )}
+        
+        {/* Preview */}
+        {postForm.description && (
+          <div className="mt-6">
+            <Text className="mb-2">Preview</Text>
+            <Card className="bg-gray-800 p-4">
+              {postMedia && (
+                <div className="mb-4">
+                  <img
+                    src={postMedia}
+                    alt="Generated content"
+                    className="w-full h-48 object-cover rounded-lg"
+                  />
+                </div>
+              )}
+              <Text className="text-white font-medium">{postForm.title}</Text>
+              <Text className="text-gray-400 mt-2">{postForm.description}</Text>
+              <div className="flex flex-wrap gap-2 mt-4">
+                {postForm.hashtags.map((tag) => (
+                  <span
+                    key={tag}
+                    className="px-2 py-1 bg-blue-500/20 text-blue-500 rounded-full text-sm"
+                  >
+                    #{tag}
+                  </span>
+                ))}
+              </div>
+            </Card>
+            </div>
+        )}
+
+        {/* Image Selection */}
+        {generatedImages.length > 0 && (
+          <div className="mt-4">
+            <Text className="mb-2">Select Image</Text>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+              {generatedImages.map((image, index) => (
+              <button 
+                  key={index}
+                  onClick={() => setPostMedia(image)}
+                  className={`relative aspect-square rounded-lg overflow-hidden ${
+                    postMedia === image ? 'ring-2 ring-blue-500' : ''
+                  }`}
+                >
+                  <img
+                    src={image}
+                    alt={`Generated option ${index + 1}`}
+                    className="w-full h-full object-cover"
+                  />
+                    </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Action Buttons */}
+        <div className="mt-6 flex justify-end gap-4">
+          <Button
+            variant="secondary"
+            onClick={() => {
+              setContentPrompt('');
+              setPostForm(prev => ({
+                ...prev,
+                title: '',
+                description: '',
+                hashtags: []
+              }));
+              setGeneratedImages([]);
+              setPostMedia(null);
+            }}
+          >
+            Clear
+          </Button>
+          <Button
+            disabled={!postForm.description || !postMedia}
+            onClick={handleSave}
+          >
+            Schedule Post
+          </Button>
+        </div>
+      </Card>
     </div>
   );
 };
@@ -695,37 +765,7 @@ const ProfileAvatar = ({ profile }) => {
   );
 };
 
-// Icons
-const WandIcon = ({ className }) => (
-  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" className={className}>
-    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" />
-  </svg>
-);
-
-const DocumentIcon = ({ className }) => (
-  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" className={className}>
-    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-  </svg>
-);
-
-const CommentIcon = ({ className }) => (
-  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" className={className}>
-    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-  </svg>
-);
-
-const ShareIcon = ({ className }) => (
-  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" className={className}>
-    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
-  </svg>
-);
-
-const SendIcon = ({ className }) => (
-  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" className={className}>
-    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
-  </svg>
-);
-
+// Keep only the PlatformIcon and InstagramIcon since they're custom
 const PlatformIcon = ({ platform, className }) => {
   switch (platform) {
     case 'linkedin':
@@ -745,81 +785,9 @@ const PlatformIcon = ({ platform, className }) => {
   }
 };
 
-const XIcon = ({ className }) => (
-  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" className={className}>
-    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-  </svg>
-);
-
-const UserIcon = ({ className }) => (
-  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" className={className}>
-    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-  </svg>
-);
-
-const CalendarIcon = ({ className }) => (
-  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" className={className}>
-    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-  </svg>
-);
-
-const ClockIcon = ({ className }) => (
-  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" className={className}>
-    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-  </svg>
-);
-
-const ChartIcon = ({ className }) => (
-  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" className={className}>
-    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-  </svg>
-);
-
-const GridIcon = ({ className }) => (
-  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" className={className}>
-    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
-  </svg>
-);
-
-const EditIcon = ({ className }) => (
-  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" className={className}>
-    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-  </svg>
-);
-
-const PlusIcon = ({ className }) => (
-  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" className={className}>
-    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-  </svg>
-);
-
-const TrendingUpIcon = ({ className }) => (
-  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" className={className}>
-    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
-  </svg>
-);
-
 const InstagramIcon = ({ className }) => (
   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className={className}>
     <path d="M12 0C8.74 0 8.333.015 7.053.072 5.775.132 4.905.333 4.14.63c-.789.306-1.459.717-2.126 1.384S.935 3.35.63 4.14C.333 4.905.131 5.775.072 7.053.012 8.333 0 8.74 0 12s.015 3.667.072 4.947c.06 1.277.261 2.148.558 2.913.306.788.717 1.459 1.384 2.126.667.666 1.336 1.079 2.126 1.384.766.296 1.636.499 2.913.558C8.333 23.988 8.74 24 12 24s3.667-.015 4.947-.072c1.277-.06 2.148-.262 2.913-.558.788-.306 1.459-.718 2.126-1.384.666-.667 1.079-1.335 1.384-2.126.296-.765.499-1.636.558-2.913.06-1.28.072-1.687.072-4.947s-.015-3.667-.072-4.947c-.06-1.277-.262-2.149-.558-2.913-.306-.789-.718-1.459-1.384-2.126C21.319 1.347 20.651.935 19.86.63c-.765-.297-1.636-.499-2.913-.558C15.667.012 15.26 0 12 0zm0 2.16c3.203 0 3.585.016 4.85.071 1.17.055 1.805.249 2.227.415.562.217.96.477 1.382.896.419.42.679.819.896 1.381.164.422.36 1.057.413 2.227.057 1.266.07 1.646.07 4.85s-.015 3.585-.074 4.85c-.061 1.17-.256 1.805-.421 2.227-.224.562-.479.96-.899 1.382-.419.419-.824.679-1.38.896-.42.164-1.065.36-2.235.413-1.274.057-1.649.07-4.859.07-3.211 0-3.586-.015-4.859-.074-1.171-.061-1.816-.256-2.236-.421-.569-.224-.96-.479-1.379-.899-.421-.419-.69-.824-.9-1.38-.165-.42-.359-1.065-.42-2.235-.045-1.26-.061-1.649-.061-4.844 0-3.196.016-3.586.061-4.861.061-1.17.255-1.814.42-2.234.21-.57.479-.96.9-1.381.419-.419.81-.689 1.379-.898.42-.166 1.051-.361 2.221-.421 1.275-.045 1.65-.06 4.859-.06l.045.03zm0 3.678c-3.405 0-6.162 2.76-6.162 6.162 0 3.405 2.76 6.162 6.162 6.162 3.405 0 6.162-2.76 6.162-6.162 0-3.405-2.76-6.162-6.162-6.162zM12 16c-2.21 0-4-1.79-4-4s1.79-4 4-4 4 1.79 4 4-1.79 4-4 4zm7.846-10.405c0 .795-.646 1.44-1.44 1.44-.795 0-1.44-.646-1.44-1.44 0-.794.646-1.439 1.44-1.439.793-.001 1.44.645 1.44 1.439z" />
-  </svg>
-);
-
-const LoadingIcon = ({ className }) => (
-  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" className={className}>
-    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-  </svg>
-);
-
-const SaveIcon = ({ className }) => (
-  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" className={className}>
-    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" />
-  </svg>
-);
-
-const MinimizeIcon = ({ className }) => (
-  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" className={className}>
-    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-4.553a2.5 2.5 0 00-3.535-3.535L9 10" />
   </svg>
 );
 

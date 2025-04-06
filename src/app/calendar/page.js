@@ -7,6 +7,7 @@ import Navbar from '../components/layout/Navbar';
 import Sidebar from '../components/layout/Sidebar';
 import { getScheduledPosts, getProfiles, addScheduledPost, updateScheduledPost } from '@/lib/firebase';
 import { postToInstagram } from '@/lib/instagram';
+import { generateSocialMediaPost, generateImage } from '@/lib/ai';
 
 const CalendarView = () => {
   const router = useRouter();
@@ -32,6 +33,9 @@ const CalendarView = () => {
   const [isPosting, setIsPosting] = useState(false);
   const [postingStatus, setPostingStatus] = useState(null);
   const [selectedPostForAction, setSelectedPostForAction] = useState(null);
+  const [imagePrompt, setImagePrompt] = useState('');
+  const [isGeneratingImage, setIsGeneratingImage] = useState(false);
+  const [generatedImages, setGeneratedImages] = useState([]);
   
   // Fetch scheduled posts from Firebase
   useEffect(() => {
@@ -715,21 +719,37 @@ const CalendarView = () => {
                     <button
                       className="py-2 px-4 bg-[var(--secondary)] text-white rounded-lg hover:bg-[var(--secondary-hover)] transition-colors disabled:opacity-50"
                       disabled={!promptInput.trim() || isGenerating}
-                      onClick={() => {
-                        // Simulate AI content generation
+                      onClick={async () => {
+                        if (!promptInput.trim() || isGenerating) return;
+                        
                         setIsGenerating(true);
-                        setTimeout(() => {
-                          const generatedTitle = `${postForm.profile?.platform.charAt(0).toUpperCase() + postForm.profile?.platform.slice(1)} Post about ${promptInput.split(' ').slice(0, 3).join(' ')}`;
-                          const generatedDesc = `Here's an engaging post about ${promptInput} tailored for ${postForm.profile?.platform}. We're excited to share our thoughts on this topic and would love to hear your feedback in the comments! #${promptInput.split(' ')[0]} #${postForm.profile?.platform} #trending`;
-                          
-                          setGeneratedContent(generatedDesc);
+                        try {
+                          // Use generateSocialMediaPost for both content and image
+                          const result = await generateSocialMediaPost(
+                            promptInput,
+                            postForm.profile?.platform || 'linkedin',
+                            'professional'
+                          );
+
+                          // Update form with generated content
+                          setGeneratedContent(result.description);
                           setPostForm(prev => ({
                             ...prev,
-                            title: generatedTitle,
-                            description: generatedDesc
+                            title: result.title,
+                            description: result.description
                           }));
+
+                          // Set the generated image if available
+                          if (result.image) {
+                            setGeneratedImage(result.image);
+                          }
+
+                        } catch (error) {
+                          console.error('Error generating content:', error);
+                          alert('Failed to generate content. Please try again.');
+                        } finally {
                           setIsGenerating(false);
-                        }, 1500);
+                        }
                       }}
                     >
                       {isGenerating ? 
@@ -794,13 +814,17 @@ const CalendarView = () => {
                     
                     {generatedImage && (
                       <div className="relative w-full aspect-video rounded-lg overflow-hidden mb-3">
-                        <Image 
-                          src={generatedImage} 
-                          alt="Post image" 
-                          fill 
-                          className="object-cover"
-                          unoptimized={generatedImage.startsWith('data:')}
-                        />
+                        {typeof generatedImage === 'string' ? (
+                          <img 
+                            src={generatedImage} 
+                            alt="Post image" 
+                            className="w-full h-full object-cover"
+                          />
+                        ) : (
+                          <div className="w-full h-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center">
+                            <ImageIcon className="w-8 h-8 text-gray-400 dark:text-gray-500" />
+                          </div>
+                        )}
                       </div>
                     )}
                     
@@ -853,7 +877,7 @@ const CalendarView = () => {
         </div>
       )}
       
-      {/* Media Modal - Placeholder for now */}
+      {/* Media Modal */}
       {isMediaModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
           <div className="bg-[var(--card)] rounded-xl p-6 w-full max-w-2xl shadow-xl">
@@ -874,22 +898,78 @@ const CalendarView = () => {
                 <div className="flex items-center gap-2 mb-3">
                   <input
                     type="text"
+                    value={imagePrompt}
+                    onChange={(e) => setImagePrompt(e.target.value)}
                     placeholder="Describe the image you want to create..."
                     className="flex-1 p-2 rounded-lg bg-[var(--background)] border border-[var(--border)] focus:outline-none focus:ring-2 focus:ring-[var(--primary)]"
                   />
                   <button
-                    className="py-2 px-4 bg-[var(--secondary)] text-white rounded-lg hover:bg-[var(--secondary-hover)] transition-colors"
-                    onClick={() => {
-                      // Simulate image generation
-                      const randomImage = 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA1MDAgMzAwIiBmaWxsPSJub25lIj48cmVjdCB3aWR0aD0iNTAwIiBoZWlnaHQ9IjMwMCIgZmlsbD0iIzNiODJmNiIvPjxjaXJjbGUgY3g9IjI1MCIgY3k9IjE1MCIgcj0iODAiIGZpbGw9IiNmZmYiLz48Y2lyY2xlIGN4PSIxNzAiIGN5PSI4MCIgcj0iMzAiIGZpbGw9IiNmZmYiLz48L3N2Zz4=';
+                    className="py-2 px-4 bg-[var(--secondary)] text-white rounded-lg hover:bg-[var(--secondary-hover)] transition-colors disabled:opacity-50"
+                    disabled={!imagePrompt.trim() || isGeneratingImage}
+                    onClick={async () => {
+                      if (!imagePrompt.trim() || isGeneratingImage) return;
                       
-                      setGeneratedImage(randomImage);
-                      handleMediaModalClose();
+                      setIsGeneratingImage(true);
+                      try {
+                        // Generate images using AI
+                        const images = await generateImage(imagePrompt);
+                        
+                        if (Array.isArray(images) && images.length > 0) {
+                          setGeneratedImages(images);
+                          setGeneratedImage(images[0]); // Set the first image as selected
+                        } else if (typeof images === 'string') {
+                          setGeneratedImages([images]);
+                          setGeneratedImage(images);
+                        }
+                        
+                        handleMediaModalClose();
+                      } catch (error) {
+                        console.error('Error generating image:', error);
+                        alert('Failed to generate image. Please try again.');
+                      } finally {
+                        setIsGeneratingImage(false);
+                      }
                     }}
                   >
-                    Generate Image
+                    {isGeneratingImage ? 
+                      <span className="flex items-center gap-2">
+                        <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent"></div>
+                        <span>Generating...</span>
+                      </span> 
+                      : 'Generate Image'
+                    }
                   </button>
                 </div>
+
+                {/* Show generated images grid if available */}
+                {generatedImages?.length > 0 && (
+                  <div className="grid grid-cols-2 gap-4 mt-4">
+                    {generatedImages.map((img, index) => (
+                      <button
+                        key={index}
+                        onClick={() => {
+                          setGeneratedImage(img);
+                          handleMediaModalClose();
+                        }}
+                        className={`relative aspect-video rounded-lg overflow-hidden border-2 ${
+                          generatedImage === img ? 'border-blue-500' : 'border-transparent'
+                        }`}
+                      >
+                        {typeof img === 'string' ? (
+                          <img 
+                            src={img} 
+                            alt={`Generated image ${index + 1}`}
+                            className="w-full h-full object-cover"
+                          />
+                        ) : (
+                          <div className="w-full h-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center">
+                            <ImageIcon className="w-8 h-8 text-gray-400 dark:text-gray-500" />
+                          </div>
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
               
               {/* Upload Section */}

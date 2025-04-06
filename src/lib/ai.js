@@ -11,6 +11,8 @@ const FALLBACK_POSTS = {
   default: "Great content is about providing value to your audience. Whether educating, entertaining, or inspiring, make sure every post has a clear purpose and speaks directly to your followers' needs and interests."
 };
 
+const genAI = new GoogleGenerativeAI(GOOGLE_API_KEY);
+
 /**
  * Generate text content using Google's Gemini API
  * @param {string} prompt - The text prompt to generate content from
@@ -28,52 +30,17 @@ export async function generateText(prompt, context = "") {
     // Try the API call first
     try {
       console.log("Attempting API call to Gemini");
-      // Use gemini-1.5-flash model
-      const response = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GOOGLE_API_KEY}`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            contents: [
-              {
-                parts: [
-                  {
-                    text: finalPrompt
-                  }
-                ]
-              }
-            ]
-          })
-        }
-      );
-
-      console.log("API response status:", response.status);
+      const model = await genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+      const result = await model.generateContent(finalPrompt);
+      const response = await result.response;
+      const text = response.text();
       
-      if (!response.ok) {
-        throw new Error(`API request failed with status ${response.status}`);
-      }
-
-      const data = await response.json();
-      console.log("API response data:", JSON.stringify(data).substring(0, 200) + "...");
-      
-      if (data.candidates && data.candidates[0] && data.candidates[0].content) {
-        const textParts = data.candidates[0].content.parts
-          .filter(part => part.text)
-          .map(part => part.text)
-          .join('\n');
-        
-        if (textParts.trim() !== '') {
-          console.log("Successfully generated text from API");
-          return textParts;
-        }
-      }
-      
-      // If we get here, we got a response but it didn't have the expected structure
-      console.warn("API response missing expected data structure");
-      throw new Error("Invalid response format from API");
+      // Parse the response into a structured format
+      return JSON.stringify({
+        title: text.split('\n')[0],
+        description: text.split('\n').slice(1, -1).join('\n'),
+        hashtags: text.match(/#[\w]+/g)?.map(tag => tag.slice(1)) || []
+      });
     } catch (apiError) {
       console.warn("API call failed, using fallback content:", apiError);
       // Fall through to mock responses
@@ -117,7 +84,11 @@ export async function generateText(prompt, context = "") {
   } catch (error) {
     console.error("Error generating text with AI:", error);
     // Return a mock response when in development to avoid breaking the UI
-    return `Here's some content to help you with ${prompt}:\n\nCreating valuable content for your audience is key to social media success. Focus on solving problems, answering questions, or entertaining your followers.`;
+    return JSON.stringify({
+      title: 'Exciting Update!',
+      description: 'We have some amazing news to share with our community. Stay tuned for more updates!',
+      hashtags: ['announcement', 'update', 'community']
+    });
   }
 }
 
@@ -130,60 +101,89 @@ export async function generateImage(prompt) {
   console.log("generateImage called with prompt:", prompt);
   
   try {
-    // Try the API endpoint for image generation
-    try {
-      console.log("Attempting API call for image generation");
-      const response = await fetch("https://pranavai.onrender.com/generate", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prompt: prompt })
+    // Process the prompt to extract relevant image keywords
+    let imagePrompt = prompt;
+    if (prompt.toLowerCase().includes('write') || prompt.toLowerCase().includes('post about')) {
+      // Extract the main topic from the prompt
+      const topics = prompt.match(/about\s+([^.!?\n]+)/i);
+      if (topics && topics[1]) {
+        imagePrompt = topics[1].trim();
+      }
+    }
+    
+    // Special handling for Eid-related prompts
+    if (imagePrompt.toLowerCase().includes('eid')) {
+      imagePrompt = "Professional photograph of Eid celebration, featuring traditional lanterns, Islamic architecture, festive decorations, warm lighting, elegant and modern style";
+    } else {
+      // Add specific image generation instructions
+      imagePrompt = `High quality professional photo of ${imagePrompt}, 4k, detailed`;
+    }
+    console.log("Processed image prompt:", imagePrompt);
+
+    // Call the actual image generation API
+    const response = await fetch("https://pranavai.onrender.com/generate", {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        prompt: imagePrompt
+      })
+    });
+
+    if (response.ok) {
+      const result = await response.json();
+      console.log("API Response structure:", {
+        has_nsfw_concepts: result.has_nsfw_concepts,
+        image_count: result.images?.length,
+        seed: result.seed,
+        timings: result.timings
       });
       
-      console.log("Image API response status:", response.status);
-      
-      if (!response.ok) {
-        throw new Error(`Image generation failed: ${response.status}`);
+      if (result.images && result.images.length > 0) {
+        const imageData = result.images[0];
+        
+        if (imageData.url && typeof imageData.url === 'string') {
+          // Validate the base64 image data
+          const isValidBase64 = (str) => {
+            try {
+              const header = str.split(',')[0];
+              const base64 = str.split(',')[1];
+              return header.includes('image/') && 
+                     base64 && 
+                     base64.length > 100 && // Minimum size for a valid image
+                     /^[A-Za-z0-9+/=]+$/.test(base64);
+            } catch (e) {
+              return false;
+            }
+          };
+
+          if (isValidBase64(imageData.url)) {
+            console.log("Successfully generated valid image data");
+            return [imageData.url];
+          } else {
+            console.error("Invalid base64 image data received:", 
+              imageData.url.substring(0, 100) + "...");
+            throw new Error('Invalid image data received');
+          }
+        }
       }
       
-      const result = await response.json();
-      console.log("Image API response:", JSON.stringify(result).substring(0, 200) + "...");
-      
-      if (result.images && result.images.length > 0 && result.images[0].url) {
-        console.log("Successfully generated image from API");
-        return result.images[0].url;
-      }
-      
-      console.warn("No valid image URL in response");
-      throw new Error("No valid image URL in response");
-    } catch (apiError) {
-      console.warn("API image generation failed, using fallback:", apiError);
-      // Fall through to fallbacks
-    }
-    
-    // Use appropriate fallback based on prompt
-    const promptLower = prompt.toLowerCase();
-    console.log("Using fallback image based on prompt type");
-    
-    if (promptLower.includes('nature') || promptLower.includes('landscape')) {
-      console.log("Using nature/landscape fallback image");
-      return 'https://images.unsplash.com/photo-1501854140801-50d01698950b?ixlib=rb-4.0.3&auto=format&fit=crop&w=1350&q=80';
-    } else if (promptLower.includes('city') || promptLower.includes('urban')) {
-      console.log("Using city/urban fallback image");
-      return 'https://images.unsplash.com/photo-1449824913935-59a10b8d2000?ixlib=rb-4.0.3&auto=format&fit=crop&w=1350&q=80';
-    } else if (promptLower.includes('office') || promptLower.includes('work')) {
-      console.log("Using office/work fallback image");
-      return 'https://images.unsplash.com/photo-1497215842964-222b430dc094?ixlib=rb-4.0.3&auto=format&fit=crop&w=1350&q=80';
-    } else if (promptLower.includes('food')) {
-      console.log("Using food fallback image");
-      return 'https://images.unsplash.com/photo-1498837167922-ddd27525d352?ixlib=rb-4.0.3&auto=format&fit=crop&w=1350&q=80';
+      console.warn("API response didn't contain valid image data:", result);
     } else {
-      console.log("Using generic fallback image");
-      return 'https://images.unsplash.com/photo-1517245386807-bb43f82c33c4?ixlib=rb-4.0.3&auto=format&fit=crop&w=1350&q=80';
+      console.error("API request failed:", response.status, response.statusText);
+      const errorText = await response.text();
+      console.error("Error details:", errorText);
     }
+    
+    throw new Error('Failed to generate image');
+    
   } catch (error) {
     console.error("Error generating image with AI:", error);
     // Return a fallback image URL instead of throwing an error
-    return 'https://images.unsplash.com/photo-1535957998253-26ae1ef29506?ixlib=rb-4.0.3&auto=format&fit=crop&w=1350&q=80';
+    return [
+      'https://images.unsplash.com/photo-1535957998253-26ae1ef29506?ixlib=rb-4.0.3&auto=format&fit=crop&w=1350&q=80'
+    ];
   }
 }
 
@@ -199,18 +199,36 @@ export async function generateSocialMediaPost(topic, platform = "linkedin", tone
   
   try {
     const prompt = `Write a social media post about ${topic} for ${platform}. Use a ${tone} tone.`;
-    return await generateText(prompt);
+    const content = await generateText(prompt);
+    const images = await generateImage(prompt);
+    
+    return {
+      ...JSON.parse(content),
+      image: images[0]
+    };
   } catch (error) {
     console.error("Error generating social media post:", error);
     
     // Use platform-specific fallback
     console.log("Using platform-specific fallback for:", platform);
     if (platform === 'linkedin') {
-      return `📊 Professional insights on ${topic}:\n\nStaying updated with the latest trends in this field can give you a competitive edge. Continuous learning and adaptation are key to success.\n\n#${topic.replace(/\s+/g, '')} #ProfessionalDevelopment`;
+      return {
+        title: `📊 Professional insights on ${topic}:`,
+        description: `Staying updated with the latest trends in this field can give you a competitive edge. Continuous learning and adaptation are key to success.`,
+        hashtags: [topic.replace(/\s+/g, ''), 'ProfessionalDevelopment']
+      };
     } else if (platform === 'instagram') {
-      return `✨ Exploring ${topic} today and loving the journey!\n\nWhat's your experience with this? Drop your thoughts below 👇\n\n#${topic.replace(/\s+/g, '')} #ShareYourJourney`;
+      return {
+        title: `✨ Exploring ${topic} today and loving the journey!`,
+        description: `What's your experience with this? Drop your thoughts below 👇`,
+        hashtags: [topic.replace(/\s+/g, ''), 'ShareYourJourney']
+      };
     } else {
-      return `Here's a sample ${platform} post about ${topic}:\n\nExcited to share my thoughts on ${topic}! This is an area with so much potential for growth and innovation. What are your experiences?`;
+      return {
+        title: `Here's a sample ${platform} post about ${topic}:`,
+        description: `Excited to share my thoughts on ${topic}! This is an area with so much potential for growth and innovation. What are your experiences?`,
+        hashtags: []
+      };
     }
   }
 }
@@ -243,10 +261,7 @@ export async function generateContentIdeas(industry, count = 5) {
         `Behind-the-scenes look at how ${industry} professionals work`,
         `Top 10 common mistakes to avoid in ${industry}`,
         `How AI and technology are changing ${industry}`,
-        `Success story: How a small ${industry} business achieved remarkable growth`,
-        `Interview with a ${industry} expert: Key insights and advice`,
-        `The future of ${industry}: Predictions and opportunities`,
-        `Ultimate beginner's guide to understanding ${industry}`
+        `Success story: How a small ${industry} business achieved remarkable growth`
       ];
     }
       
@@ -287,8 +302,7 @@ export const analyzeImage = async (imageFile) => {
 
     // Initialize the model
     console.log("Initializing Gemini Pro Vision model");
-    const genAI = new GoogleGenerativeAI(GOOGLE_API_KEY);
-    const model = genAI.getGenerativeModel({ model: "gemini-pro-vision" });
+    const model = await genAI.getGenerativeModel({ model: 'gemini-pro-vision' });
 
     // Convert blob to base64 for the model
     console.log("Converting blob to base64 for model input");
@@ -338,4 +352,4 @@ export const analyzeImage = async (imageFile) => {
       hashtags: ["content", "social", "sharing", "community", "engagement"]
     };
   }
-}; 
+};
