@@ -7,6 +7,27 @@ import Image from 'next/image';
 const Navbar = () => {
   const [activeTab, setActiveTab] = useState('calendar');
 
+  // New function to handle the automation button click
+  const handleAutomationClick = async () => {
+    try {
+      // Making a POST request to the Next.js API route
+      const response = await fetch('/api/automate', { // Updated URL
+        method: 'POST',
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json(); // Get response from the API route
+      console.log('Automation response:', data.message);
+
+    } catch (error) {
+      console.error("Error triggering automation:", error);
+      // Optionally, display an error message to the user
+    }
+  };
+
   return (
     <nav className="flex items-center justify-between px-6 py-4 border-b border-[var(--border)]">
       <div className="flex items-center space-x-10">
@@ -43,6 +64,13 @@ const Navbar = () => {
             onClick={() => setActiveTab('messages')}
           >
             Messages
+          </NavLink>
+          <NavLink 
+            href="/automation" 
+            isActive={activeTab === 'automation'} 
+            onClick={() => setActiveTab('automation')}
+          >
+            Automation
           </NavLink>
         </div>
       </div>
